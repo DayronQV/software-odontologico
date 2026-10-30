@@ -47,7 +47,8 @@ describe('navFor', () => {
 
   it('agrupa el menú por secciones en orden', () => {
     expect(navSections('RECEPCIONISTA').map((g) => g.section)).toEqual(['Principal', 'Clínica', 'Caja', 'Cuenta']);
-    expect(navSections('ADMIN_TI').map((g) => g.section)).toEqual(['Principal', 'Caja', 'Sistema', 'Cuenta']);
+    expect(navSections('AUDITOR').map((g) => g.section)).toEqual(['Principal', 'Caja', 'Gestión', 'Sistema', 'Cuenta']);
+    expect(navSections('ADMIN_TI').map((g) => g.section)).toEqual(['Principal', 'Caja', 'Gestión', 'Sistema', 'Cuenta']);
   });
 });
 

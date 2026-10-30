@@ -1,9 +1,9 @@
 import PDFDocument from 'pdfkit';
 
 /** Dibuja un PDF A4 con `draw` y devuelve sus bytes. */
-export function renderPdf(draw: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
+export function renderPdf(draw: (doc: PDFKit.PDFDocument) => void, options: { landscape?: boolean } = {}): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 48 });
+    const doc = new PDFDocument({ size: 'A4', margin: 48, layout: options.landscape ? 'landscape' : 'portrait' });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));

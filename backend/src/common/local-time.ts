@@ -55,3 +55,13 @@ export function formatLocalTime(date: Date, timeZone: string, locale = 'es'): st
     date,
   );
 }
+
+/** Inicio y fin (UTC) de un día "AAAA-MM-DD" visto en la zona horaria de la clínica. */
+export function localDayRange(day: string, timeZone: string): { start: Date; end: Date } {
+  const [y, m, d] = day.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d);
+  const parts = localParts(new Date(guess), timeZone);
+  const offset = Date.UTC(parts.year, parts.month - 1, parts.day, 0, parts.minuteOfDay) - guess;
+  const start = new Date(guess - offset);
+  return { start, end: new Date(start.getTime() + 86_400_000) };
+}

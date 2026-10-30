@@ -31,6 +31,18 @@ import { AnamnesisTab } from './features/patients/record/AnamnesisTab';
 import { AppointmentsTab } from './features/patients/record/AppointmentsTab';
 import { PatientRecordLayout } from './features/patients/record/PatientRecordLayout';
 import { SummaryTab } from './features/patients/record/SummaryTab';
+import { CommissionsLayout } from './features/commissions/CommissionsLayout';
+import { RulesTab } from './features/commissions/RulesTab';
+import { SettlementsTab } from './features/commissions/SettlementsTab';
+import { SimulatorTab } from './features/commissions/SimulatorTab';
+import { CountsTab } from './features/inventory/CountsTab';
+import { InventoryLayout } from './features/inventory/InventoryLayout';
+import { ItemsTab } from './features/inventory/ItemsTab';
+import { KardexTab } from './features/inventory/KardexTab';
+import { RecipesTab } from './features/inventory/RecipesTab';
+import { StockTab } from './features/inventory/StockTab';
+import { SupplyTab } from './features/inventory/SupplyTab';
+import { ReportsPage } from './features/reports/ReportsPage';
 import { CASHIERS, CLINICAL_STAFF, PATIENT_STAFF, type Role } from './lib/roles';
 
 // El calendario (FullCalendar) es lo más pesado: se descarga solo al abrir la Agenda.
@@ -98,6 +110,22 @@ export function App() {
         <Route path="billing/pos" element={guard(CASHIERS, <PosPage />)} />
         <Route path="billing/invoices" element={guard([...CASHIERS, 'AUDITOR'], <InvoicesPage />)} />
         <Route path="billing/cash" element={guard([...CASHIERS, 'AUDITOR'], <CashPage />)} />
+
+        {/* Gestión: inventario, comisiones y reportes */}
+        <Route path="inventory" element={guard(['ADMIN_TI', 'ASISTENTE', 'AUDITOR'], <InventoryLayout />)}>
+          <Route index element={<StockTab />} />
+          <Route path="items" element={<ItemsTab />} />
+          <Route path="movements" element={<KardexTab />} />
+          <Route path="recipes" element={<RecipesTab />} />
+          <Route path="supply" element={<SupplyTab />} />
+          <Route path="counts" element={<CountsTab />} />
+        </Route>
+        <Route path="commissions" element={guard(['ADMIN_TI', 'AUDITOR', 'ODONTOLOGO'], <CommissionsLayout />)}>
+          <Route index element={<SettlementsTab />} />
+          <Route path="rules" element={<RulesTab />} />
+          <Route path="simulator" element={<SimulatorTab />} />
+        </Route>
+        <Route path="reports" element={guard(['ADMIN_TI', 'AUDITOR', 'ODONTOLOGO'], <ReportsPage />)} />
 
         {/* Sistema */}
         <Route path="admin" element={guard(['ADMIN_TI'], <AdminLayout />)}>

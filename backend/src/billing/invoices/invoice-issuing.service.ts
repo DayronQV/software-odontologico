@@ -23,6 +23,7 @@ import {
   type ChargeResult,
   type PaymentGateway,
 } from '../../integrations/payments/payment-gateway';
+import { CommissionsService } from '../../commissions/commissions.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CashSessionsService } from '../cash/cash-sessions.service';
 import { calculateInvoice } from '../domain/invoice-calculator';
@@ -52,6 +53,7 @@ export class InvoiceIssuingService {
     private readonly settings: SettingsService,
     private readonly cash: CashSessionsService,
     private readonly query: InvoicesQueryService,
+    private readonly commissions: CommissionsService,
     @Inject(FISCAL_INVOICE_PROVIDER) private readonly fiscal: FiscalInvoiceProvider,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
   ) {}
@@ -133,6 +135,8 @@ export class InvoiceIssuingService {
             },
           },
         });
+        // RF-13: la comisión del profesional se devenga en la misma transacción que el cobro
+        await this.commissions.accrueForInvoice(tx, invoice.id);
         return invoice.id;
       });
     } catch (error) {

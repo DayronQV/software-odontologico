@@ -2,6 +2,7 @@
 // Fase 0: usuarios, MFA, sesiones, auditoría
 // Fase 1: catálogo, pacientes, agenda, notificaciones, facturación y caja
 // Fase 2: odontograma, periodontograma, evolución SOEP, consentimientos, recetas, adjuntos, presupuestos
+// Fase 3: inventario por consultorio y profesional, recetas de consumo, comisiones y reportes
 
 generator client {
   provider      = "prisma-client-js"
@@ -375,6 +376,7 @@ model Procedure {
   consentTemplates ConsentTemplate[]
   consents         PatientConsent[]
   treatmentItems   TreatmentItem[]
+  recipes          ConsumptionRecipe[]
 
   @@index([name])
   @@index([category])
@@ -391,21 +393,25 @@ model Insurer {
 
 /// Parámetros globales (una sola fila, id = 1).
 model ClinicSettings {
-  id                 Int      @id @default(1)
+  id                 Int         @id @default(1)
   clinicName         String
   timezone           String
   currency           String
-  taxRatePercent     Decimal  @db.Decimal(5, 2)
+  taxRatePercent     Decimal     @db.Decimal(5, 2)
   /// Apertura y cierre de la clínica, en minutos desde las 00:00 (07:00 = 420, 21:00 = 1260).
   opensAtMinute      Int
   closesAtMinute     Int
   /// Antelación (horas) de los recordatorios automáticos. Por defecto 48 y 24 (RF-11).
   reminderHours      Int[]
   /// Descuento máximo que puede aplicar recepción sin autorización del administrador.
-  maxDiscountPercent Decimal  @db.Decimal(5, 2)
+  maxDiscountPercent Decimal     @db.Decimal(5, 2)
   /// Horas durante las que una nota de evolución sigue siendo editable (RF-05). Por defecto 24.
-  noteLockHours      Int      @default(24)
-  updatedAt          DateTime @updatedAt
+  noteLockHours      Int         @default(24)
+  /// Qué hacer cuando el descargo automático de insumos no alcanza el stock (RF-14).
+  stockPolicy        StockPolicy @default(ALLOW_WITH_ALERT)
+  /// Días de antelación de la alerta de insumos por vencer.
+  expiryAlertDays    Int         @default(30)
+  updatedAt          DateTime    @updatedAt
 }
 
 /// Reglas configurables que convierten datos de la anamnesis en alertas médicas (RF-02).
@@ -1208,4 +1214,241 @@ model BudgetApproval {
 
   budget  Budget         @relation(fields: [budgetId], references: [id])
   signing SigningRequest @relation(fields: [signingId], references: [id])
+}
+
+// =====================================================================================
+// Fase 3 — inventario por consultorio y profesional, comisiones y reportes
+// =====================================================================================
+
+enum StockMovementType {
+  ENTRY
+  ADJUSTMENT
+  TRANSFER_OUT
+  TRANSFER_IN
+  CONSUMPTION
+  REVERSAL
+}
+
+enum StockPolicy {
+  ALLOW_WITH_ALERT
+  BLOCK
+}
+
+enum SupplyRequestStatus {
+  REQUESTED
+  PREPARED
+  CANCELED
+}
+
+enum StockCountStatus {
+  OPEN
+  RECONCILED
+}
+
+enum CommissionMode {
+  PERCENT
+  FIXED_AMOUNT
+  PERCENT_NET_OF_COSTS
+}
+
+enum CommissionEntryKind {
+  ACCRUAL
+  REVERSAL
+}
+
+enum SettlementStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+model InventoryItem {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  unit      String
+  /// Costo por unidad (se usa para valorizar el inventario y para la base de comisiones).
+  unitCost  Decimal  @db.Decimal(12, 4)
+  minStock  Decimal  @default(0) @db.Decimal(12, 3)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements StockMovement[]
+  recipes   ConsumptionRecipe[]
+
+  @@index([name])
+}
+
+/// Ubicación de stock: un consultorio O un profesional (exactamente uno).
+model StockLocation {
+  id             String   @id @default(uuid())
+  name           String
+  officeId       String?  @unique
+  professionalId String?  @unique
+  createdAt      DateTime @default(now())
+
+  movements StockMovement[]
+}
+
+/// Kardex: cada fila es un movimiento inmutable. El stock es la suma de las cantidades (con signo).
+model StockMovement {
+  id                String            @id @default(uuid())
+  itemId            String
+  locationId        String
+  type              StockMovementType
+  /// Con signo: entradas y traslados recibidos suman; salidas, consumo y traslados enviados restan.
+  quantity          Decimal           @db.Decimal(12, 3)
+  unitCost          Decimal           @db.Decimal(12, 4)
+  supplier          String?
+  lotCode           String?
+  expiresAt         DateTime?         @db.Date
+  reason            String?
+  transferId        String?
+  procedureRecordId String?
+  reversalOfId      String?           @unique
+  createdById       String
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+
+  item     InventoryItem @relation(fields: [itemId], references: [id])
+  location StockLocation @relation(fields: [locationId], references: [id])
+
+  @@index([itemId, locationId, createdAt])
+  @@index([procedureRecordId])
+  @@index([expiresAt])
+}
+
+/// Descargos permitidos con stock insuficiente (política «permitir con alerta»).
+model StockException {
+  id                String   @id @default(uuid())
+  itemId            String
+  locationId        String
+  procedureRecordId String?
+  missing           Decimal  @db.Decimal(12, 3)
+  createdAt         DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model ConsumptionRecipe {
+  id          String  @id @default(uuid())
+  procedureId String
+  itemId      String
+  quantity    Decimal @db.Decimal(12, 3)
+
+  procedure Procedure     @relation(fields: [procedureId], references: [id])
+  item      InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@unique([procedureId, itemId])
+}
+
+model SupplyRequest {
+  id            String              @id @default(uuid())
+  appointmentId String
+  status        SupplyRequestStatus @default(REQUESTED)
+  requestedById String
+  preparedById  String?
+  preparedAt    DateTime?
+  createdAt     DateTime            @default(now())
+
+  lines SupplyRequestLine[]
+
+  @@index([appointmentId])
+  @@index([status])
+}
+
+model SupplyRequestLine {
+  id        String  @id @default(uuid())
+  requestId String
+  itemId    String
+  quantity  Decimal @db.Decimal(12, 3)
+
+  request SupplyRequest @relation(fields: [requestId], references: [id])
+}
+
+/// Toma de inventario físico y su conciliación contra el sistema.
+model StockCount {
+  id             String           @id @default(uuid())
+  locationId     String
+  status         StockCountStatus @default(OPEN)
+  createdById    String
+  reconciledById String?
+  reconciledAt   DateTime?
+  createdAt      DateTime         @default(now())
+
+  lines StockCountLine[]
+}
+
+model StockCountLine {
+  id         String   @id @default(uuid())
+  countId    String
+  itemId     String
+  systemQty  Decimal  @db.Decimal(12, 3)
+  countedQty Decimal? @db.Decimal(12, 3)
+
+  count StockCount @relation(fields: [countId], references: [id])
+
+  @@unique([countId, itemId])
+}
+
+model CommissionRule {
+  id             String         @id @default(uuid())
+  professionalId String
+  /// Nulo = aplica a todos los procedimientos del profesional.
+  procedureId    String?
+  mode           CommissionMode
+  /// Porcentaje (0–100) o monto fijo, según la modalidad.
+  value          Decimal        @db.Decimal(12, 2)
+  validFrom      DateTime       @db.Date
+  validTo        DateTime?      @db.Date
+  /// Con varias reglas vigentes gana la de mayor prioridad.
+  priority       Int            @default(0)
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+
+  @@index([professionalId, active])
+}
+
+/// Comisión devengada por una línea cobrada; la anulación de la factura agrega una fila REVERSAL.
+model CommissionEntry {
+  id             String              @id @default(uuid())
+  professionalId String
+  invoiceId      String
+  invoiceLineId  String
+  procedureId    String?
+  ruleId         String?
+  kind           CommissionEntryKind
+  baseAmount     Decimal             @db.Decimal(12, 2)
+  labCost        Decimal             @db.Decimal(12, 2)
+  materialsCost  Decimal             @db.Decimal(12, 2)
+  /// Con signo: la reversión es negativa.
+  amount         Decimal             @db.Decimal(12, 2)
+  settlementId   String?
+  createdAt      DateTime            @default(now())
+
+  settlement CommissionSettlement? @relation(fields: [settlementId], references: [id])
+
+  @@unique([invoiceLineId, kind])
+  @@index([professionalId, createdAt])
+  @@index([invoiceId])
+}
+
+model CommissionSettlement {
+  id             String           @id @default(uuid())
+  number         Int              @unique @default(autoincrement())
+  professionalId String
+  periodStart    DateTime         @db.Date
+  periodEnd      DateTime         @db.Date
+  status         SettlementStatus @default(DRAFT)
+  total          Decimal          @db.Decimal(12, 2)
+  createdById    String
+  approvedById   String?
+  approvedAt     DateTime?
+  paidById       String?
+  paidAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  entries CommissionEntry[]
+
+  @@index([professionalId, periodStart])
 }

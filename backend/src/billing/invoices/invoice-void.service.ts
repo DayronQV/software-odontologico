@@ -7,6 +7,7 @@ import {
   type FiscalInvoiceProvider,
 } from '../../integrations/fiscal/fiscal-invoice-provider';
 import { PAYMENT_GATEWAY, type PaymentGateway } from '../../integrations/payments/payment-gateway';
+import { CommissionsService } from '../../commissions/commissions.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CashSessionsService } from '../cash/cash-sessions.service';
 import { CARD_METHODS } from '../domain/payments-validator';
@@ -24,6 +25,7 @@ export class InvoiceVoidService {
     private readonly prisma: PrismaService,
     private readonly cash: CashSessionsService,
     private readonly query: InvoicesQueryService,
+    private readonly commissions: CommissionsService,
     @Inject(FISCAL_INVOICE_PROVIDER) private readonly fiscal: FiscalInvoiceProvider,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
   ) {}
@@ -63,6 +65,8 @@ export class InvoiceVoidService {
           },
         });
       }
+      // RF-13: la anulación revierte la comisión devengada (sin borrar el devengo original)
+      await this.commissions.reverseForInvoice(tx, id);
       return tx.creditNote.create({
         data: { invoiceId: id, reason: reason.trim(), total: invoice.total, issuedById: user.id },
       });

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { AppointmentStatus, Prisma, TreatmentItemStatus } from '@prisma/client';
 import type { AuthUser } from '../../common/types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ConsumptionService } from '../../inventory/consumption.service';
 import { ConsentsService } from '../consents/consents.service';
 import { isValidToothCode } from '../domain/tooth-notation';
 import { ClinicalLookupService } from '../shared/clinical-lookup.service';
@@ -24,6 +25,7 @@ export class ProcedureRecordsService {
     private readonly prisma: PrismaService,
     private readonly lookup: ClinicalLookupService,
     private readonly consents: ConsentsService,
+    private readonly consumption: ConsumptionService,
   ) {}
 
   async list(patientId: string) {
@@ -69,6 +71,13 @@ export class ProcedureRecordsService {
           treatmentItemId: dto.treatmentItemId ?? null,
         },
         include: RECORD_INCLUDE,
+      });
+      // RF-14: el descargo de insumos va en la MISMA transacción (o se registra y se descarga, o nada)
+      await this.consumption.consume(tx, {
+        id: created.id,
+        procedureId: dto.procedureId,
+        performedById: user.id,
+        appointmentId: created.appointmentId,
       });
       if (dto.treatmentItemId) {
         // Pasa de aprobado/agendado a realizado en la misma transacción.

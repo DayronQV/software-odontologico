@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
-import { Field } from '../../../components/ui/Field';
+import { Field, SelectField } from '../../../components/ui/Field';
 import { useToast } from '../../../components/ui/Toast';
 import { api } from '../../../lib/api';
 import { clockToMinutes, minutesToClock } from '../../../lib/format';
@@ -19,6 +19,8 @@ const schema = z
     taxRatePercent: z.number({ message: 'Ingrese un número' }).min(0).max(100),
     maxDiscountPercent: z.number({ message: 'Ingrese un número' }).min(0).max(100),
     noteLockHours: z.number({ message: 'Ingrese un número' }).int('Use horas enteras').min(0).max(720),
+    stockPolicy: z.enum(['ALLOW_WITH_ALERT', 'BLOCK']),
+    expiryAlertDays: z.number({ message: 'Ingrese un número' }).int('Use días enteros').min(1).max(365),
     opensAt: z.string().regex(/^\d{2}:\d{2}$/, 'Hora inválida'),
     closesAt: z.string().regex(/^\d{2}:\d{2}$/, 'Hora inválida'),
     reminderHours: z
@@ -49,6 +51,8 @@ export function SettingsPage() {
       taxRatePercent: settings.taxRatePercent,
       maxDiscountPercent: settings.maxDiscountPercent,
       noteLockHours: settings.noteLockHours,
+      stockPolicy: settings.stockPolicy,
+      expiryAlertDays: settings.expiryAlertDays,
       opensAt: minutesToClock(settings.opensAtMinute),
       closesAt: minutesToClock(settings.closesAtMinute),
       reminderHours: settings.reminderHours.join(', '),
@@ -66,6 +70,8 @@ export function SettingsPage() {
           taxRatePercent: v.taxRatePercent,
           maxDiscountPercent: v.maxDiscountPercent,
           noteLockHours: v.noteLockHours,
+          stockPolicy: v.stockPolicy,
+          expiryAlertDays: v.expiryAlertDays,
           opensAtMinute: clockToMinutes(v.opensAt),
           closesAtMinute: clockToMinutes(v.closesAt),
           reminderHours: [...new Set(v.reminderHours.split(',').map((h) => Number(h.trim())))],
@@ -106,6 +112,16 @@ export function SettingsPage() {
       <Card title="Historia clínica" description="Las notas de evolución se pueden editar durante este plazo; después solo se corrigen con una adenda firmada.">
         <div className="max-w-sm">
           <Field label="Plazo de edición de notas (horas)" type="number" hint="24 por defecto." error={errors.noteLockHours?.message} {...register('noteLockHours', { valueAsNumber: true })} />
+        </div>
+      </Card>
+
+      <Card title="Inventario" description="Qué hacer cuando el descargo automático de insumos no encuentra stock suficiente, y con cuántos días de antelación avisar los vencimientos.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SelectField label="Stock insuficiente al completar un procedimiento" {...register('stockPolicy')}>
+            <option value="ALLOW_WITH_ALERT">Permitir y registrar una alerta</option>
+            <option value="BLOCK">Bloquear el registro del procedimiento</option>
+          </SelectField>
+          <Field label="Aviso de vencimiento (días)" type="number" error={errors.expiryAlertDays?.message} {...register('expiryAlertDays', { valueAsNumber: true })} />
         </div>
       </Card>
 

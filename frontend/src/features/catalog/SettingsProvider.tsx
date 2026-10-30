@@ -12,6 +12,8 @@ const DEFAULTS: ClinicSettings = {
   reminderHours: [48, 24],
   maxDiscountPercent: 10,
   noteLockHours: 24,
+  stockPolicy: 'ALLOW_WITH_ALERT',
+  expiryAlertDays: 30,
 };
 
 interface SettingsContextValue {

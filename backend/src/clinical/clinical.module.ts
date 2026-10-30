@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { FilesModule } from '../files/files.module';
+import { InventoryModule } from '../inventory/inventory.module';
 import { SigningModule } from '../signing/signing.module';
 import { AttachmentsController } from './attachments/attachments.controller';
 import { AttachmentsService } from './attachments/attachments.service';
@@ -33,7 +34,7 @@ import { TimelineService } from './timeline/timeline.service';
  * Los presupuestos viven en TreatmentsModule, que depende de este.
  */
 @Module({
-  imports: [AuthModule, CatalogModule, FilesModule, SigningModule],
+  imports: [AuthModule, CatalogModule, FilesModule, InventoryModule, SigningModule],
   controllers: [
     OdontogramController,
     PerioController,

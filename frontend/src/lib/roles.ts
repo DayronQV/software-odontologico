@@ -34,7 +34,7 @@ export interface NavItem {
   label: string;
   icon: IconName;
   roles: Role[];
-  section: 'Principal' | 'Clínica' | 'Caja' | 'Sistema' | 'Cuenta';
+  section: 'Principal' | 'Clínica' | 'Caja' | 'Gestión' | 'Sistema' | 'Cuenta';
 }
 
 /** Menú lateral: cada perfil solo ve lo que puede usar (menor privilegio también en la interfaz). */
@@ -46,6 +46,9 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/billing/pos', label: 'Punto de venta', icon: 'receipt', roles: CASHIERS, section: 'Caja' },
   { to: '/billing/invoices', label: 'Comprobantes', icon: 'file', roles: [...CASHIERS, 'AUDITOR'], section: 'Caja' },
   { to: '/billing/cash', label: 'Caja', icon: 'wallet', roles: [...CASHIERS, 'AUDITOR'], section: 'Caja' },
+  { to: '/inventory', label: 'Inventario', icon: 'box', roles: ['ADMIN_TI', 'ASISTENTE', 'AUDITOR'], section: 'Gestión' },
+  { to: '/commissions', label: 'Comisiones', icon: 'coin', roles: ['ADMIN_TI', 'AUDITOR', 'ODONTOLOGO'], section: 'Gestión' },
+  { to: '/reports', label: 'Reportes', icon: 'chart', roles: ['ADMIN_TI', 'AUDITOR', 'ODONTOLOGO'], section: 'Gestión' },
   { to: '/admin', label: 'Administración', icon: 'settings', roles: ['ADMIN_TI'], section: 'Sistema' },
   { to: '/audit', label: 'Auditoría', icon: 'shield', roles: ['ADMIN_TI', 'AUDITOR'], section: 'Sistema' },
   { to: '/account/password', label: 'Mi cuenta', icon: 'user', roles: ALL_ROLES, section: 'Cuenta' },

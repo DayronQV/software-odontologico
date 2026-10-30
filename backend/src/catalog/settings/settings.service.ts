@@ -44,6 +44,8 @@ export class SettingsService {
         reminderHours: dto.reminderHours && [...dto.reminderHours].sort((a, b) => b - a),
         maxDiscountPercent: dto.maxDiscountPercent,
         noteLockHours: dto.noteLockHours,
+        stockPolicy: dto.stockPolicy,
+        expiryAlertDays: dto.expiryAlertDays,
       },
     });
   }

@@ -1,7 +1,9 @@
+import { StockPolicy } from '@prisma/client';
 import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -72,4 +74,16 @@ export class UpdateSettingsDto {
   @Min(0)
   @Max(720)
   noteLockHours?: number;
+
+  /** Qué hacer si el descargo automático de insumos no alcanza el stock (RF-14). */
+  @IsOptional()
+  @IsEnum(StockPolicy)
+  stockPolicy?: StockPolicy;
+
+  /** Días de antelación de la alerta de insumos por vencer. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  expiryAlertDays?: number;
 }

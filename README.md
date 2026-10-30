@@ -4,7 +4,7 @@ Sistema Integral de Gestión Odontológica y Expediente Clínico Digital — pro
 
 Implementa el *Documento de Requerimientos de Software (SRS v1.0)*: pacientes, agenda, odontograma, periodontograma, notas SOEP, consentimientos, presupuestos, facturación, inventario y auditoría, con seguridad de nivel clínico (TLS 1.3, AES-256, MFA, RBAC, log inmutable).
 
-> **Estado:** Fases 0 (fundación y seguridad), 1 (core administrativo y turnos) y 2 (core clínico: odontograma, periodontograma, evolución SOEP firmada, consentimientos, recetas, adjuntos y presupuestos) completadas. Ver [`CLAUDE.md`](CLAUDE.md) para el contexto completo y el avance por fases.
+> **Estado:** Fases 0 (fundación y seguridad), 1 (core administrativo y turnos) 2 (core clínico) y 3 (inventario por consultorio y profesional, comisiones y reportes BI) completadas. Ver [`CLAUDE.md`](CLAUDE.md) para el contexto completo y el avance por fases.
 
 ## Stack
 
@@ -88,6 +88,14 @@ npm run dev
 - **Recetas** inmutables con alerta de alergias, **adjuntos** (Rx, fotos, PDF) con validación y URLs firmadas de 60 s, **plan por fases + presupuesto** con descuentos autorizados y **aprobación parcial** que genera tareas agendables desde la Agenda.
 - Expediente en el frontend con línea de tiempo y pantalla de **Atención** para tablet (≥ 10,5").
 - Datos de demostración: Carlos Mendoza tiene odontograma, periodontograma completo, una nota firmada y un plan con presupuesto.
+
+## Fase 3 en breve (finanzas, inventario y reportes)
+
+- **Inventario** por consultorio y por profesional: entradas con lote y vencimiento, traslados, ajustes con motivo, kardex inmutable, alertas de stock mínimo y vencimiento, preparación de insumos por el asistente y toma de inventario físico conciliada por el auditor.
+- **Descargo automático (RF-14):** cada procedimiento tiene una receta de consumo; al registrarlo como realizado se descuenta del stock del profesional y luego del consultorio, en la misma transacción y una sola vez. Con stock insuficiente se permite con alerta o se bloquea (parámetro).
+- **Comisiones (RF-13):** porcentaje fijo, monto fijo o porcentaje tras laboratorio y materiales, con vigencia y prioridad. Se devengan al cobrar, se revierten al anular y se liquidan por período (borrador → aprobada → pagada, con PDF).
+- **Reportes BI:** corte de caja, ingresos, cuentas por cobrar, agenda y No-Show, procedimientos, presupuestos, inventario y honorarios, con panel de KPIs y exportación PDF/CSV auditada.
+- El Auditor ve caja, honorarios e inventario pero no datos clínicos; el odontólogo solo sus propios indicadores y comisiones; recepción no accede.
 
 ## Pruebas
 

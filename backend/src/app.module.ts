@@ -9,6 +9,9 @@ import { PatientsModule } from './patients/patients.module';
 import { AgendaModule } from './agenda/agenda.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { BillingModule } from './billing/billing.module';
+import { ReportsModule } from './reports/reports.module';
+import { CommissionsModule } from './commissions/commissions.module';
+import { InventoryModule } from './inventory/inventory.module';
 import { ClinicalModule } from './clinical/clinical.module';
 import { SigningModule } from './signing/signing.module';
 import { TreatmentsModule } from './treatments/treatments.module';
@@ -41,6 +44,9 @@ import { UsersModule } from './users/users.module';
     NotificationsModule,
     BillingModule,
     SigningModule,
+    CommissionsModule,
+    ReportsModule,
+    InventoryModule,
     ClinicalModule,
     TreatmentsModule,
     FilesModule,

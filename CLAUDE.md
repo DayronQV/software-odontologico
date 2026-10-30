@@ -63,7 +63,7 @@ Implícitos a no olvidar: recetas odontológicas, catálogo médico (procedimien
 | 0 | Fundación: Docker, NestJS, React, JWT, RBAC, MFA, sesión 15 min, auditoría inmutable, AES-256, TLS 1.3, files, colas, WSS, seed, tests | ✅ **Completada** |
 | 1 | Pacientes (RF-01/02), agenda (RF-09/10, RN-03), recordatorios (RF-11), POS/facturación simulada (RF-12), caja ciega (RN-02), catálogo médico, usuarios/catálogos Admin | ✅ **Completada** |
 | 2 | Odontograma, periodontograma, SOEP+firma, consentimientos, recetas, presupuestos, adjuntos (RF-03…08, RN-01) | ✅ **Completada** |
-| 3 | Comisiones (RF-13), descargo de insumos (RF-14), inventario, reportes BI, rol Auditor | ⏳ Pendiente |
+| 3 | Comisiones (RF-13), descargo de insumos (RF-14), inventario, reportes BI, rol Auditor | ✅ **Completada** |
 | 4 | UAT, SAST/DAST, carga 150 usuarios, backups, producción, OpenAPI final | ⏳ Pendiente |
 
 Resultados Fase 0: backend 100 pruebas (cobertura ≈ 98 % líneas), frontend 60 pruebas (cobertura ≈ 54 %; el SRS exige 80 % solo en endpoints críticos del backend), lint y tipos limpios. Verificado en Docker: TLS 1.2 rechazado/TLS 1.3 ok, MFA→RBAC→WSS por el gateway, campos cifrados en Postgres, triggers de auditoría, y UI responsive medida en 1920×1080, 1366×768, iPad 10.5" (horizontal y vertical).
@@ -71,6 +71,14 @@ Resultados Fase 0: backend 100 pruebas (cobertura ≈ 98 % líneas), frontend 60
 Resultados Fase 1: backend 34 suites / 300 pruebas (≈ 95 % líneas), frontend 17 archivos / 120 pruebas, tipos y lint limpios; E2E vivo por Docker (33/33 comprobaciones).
 
 Resultados Fase 2: backend 47 suites / 484 pruebas (≈ 93 % sentencias, 94 % líneas), frontend 24 archivos / 198 pruebas, tipos y lint limpios; verificación en vivo por Docker 30/30 y expediente + odontograma en ≈ 50 ms (RNF-01: < 1,5 s).
+
+Resultados Fase 3: backend 53 suites / 563 pruebas (≈ 92 % sentencias, 94 % líneas), frontend 25 archivos / 204 pruebas, tipos y lint limpios; verificación en vivo por Docker; reportes con ~30 000 filas en < 150 ms.
+
+### Arquitectura Fase 3
+- Backend: `inventory/` (ubicaciones por consultorio/profesional, stock = suma del kardex inmutable, alertas, recetas, `ConsumptionService` llamado desde `ProcedureRecordsService` DENTRO de su transacción, preparación de insumos, conteos) · `commissions/` (calculador puro, reglas, devengo/reversión desde `InvoiceIssuingService`/`InvoiceVoidService`, liquidaciones + PDF) · `reports/` (registro de reportes `ReportDefinition`, exportación CSV/PDF, panel con caché Redis 60 s).
+- Integridad SQL (migración `phase3_finanzas_inventario`): `StockMovement` y `CommissionEntry` inmutables, índice único parcial que hace idempotente el descargo, liquidaciones aprobadas/pagadas no se borran, `TRUNCATE` bloqueado.
+- Permisos: inventario ADMIN_TI/ASISTENTE/AUDITOR (escribe ADMIN_TI y ASISTENTE; concilia AUDITOR); comisiones y reportes ADMIN_TI/AUDITOR, el ODONTOLOGO solo lo propio (`scopeProfessional`); recepción nada. Anular facturas pagadas en efectivo exige caja abierta de quien anula.
+- Trampas: (1) las exportaciones se auditan con `@AuditAction('EXPORT')`; (2) el BOM del CSV se escribe como `﻿` (un literal invisible rompe eslint); (3) en tests, `npx` a veces devuelve 127 en la primera llamada de un comando compuesto: repetir; (4) el límite de login (5/min) afecta a los scripts de verificación en vivo.
 
 ### Arquitectura Fase 2
 - Backend: `clinical/` (domain: tooth-notation FDI↔Universal, finding-catalog, perio-calculations, signature SHA-256, note-lock, allergy-check, attachment-validator · odontogram · perio · notes (SOEP, adendas, signos vitales) · procedures (RN-01) · consents · prescriptions · attachments · timeline · shared) · `signing/` (firma del paciente táctil/OTP, reutilizada por consentimientos y aprobación de presupuestos mediante `SigningHandler`) · `treatments/` (planes, presupuestos, aprobación parcial, tareas agendables) · `files/blob-storage.service.ts` (MinIO).

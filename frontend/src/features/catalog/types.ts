@@ -61,6 +61,8 @@ export interface ClinicSettings {
   maxDiscountPercent: number;
   /** Horas durante las que una nota de evolución sigue siendo editable. */
   noteLockHours: number;
+  stockPolicy: 'ALLOW_WITH_ALERT' | 'BLOCK';
+  expiryAlertDays: number;
 }
 
 export type AlertKind = 'DRUG_ALLERGY' | 'SYSTEMIC_DISEASE' | 'COAGULOPATHY' | 'ANTICOAGULANT';
