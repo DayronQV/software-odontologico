@@ -16,20 +16,26 @@ const SIZES = { md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 export function Modal({ open, title, onClose, children, dismissible = true, size = 'md' }: ModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  // `onClose` suele ser una función nueva en cada render: si fuera dependencia del efecto, el foco
+  // volvería al diálogo con cada tecla escrita en un formulario que vive en el mismo componente.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && dismissible) onClose();
+      if (event.key === 'Escape' && dismissible) onCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
       previous?.focus?.();
     };
-  }, [open, dismissible, onClose]);
+  }, [open, dismissible]);
 
   if (!open) return null;
   return (

@@ -30,6 +30,14 @@ export class CreateAppointmentDto {
   @IsUUID('all', { each: true })
   procedureIds!: string[];
 
+  /** Ítems aprobados del plan de tratamiento que se agendan en esta cita (RF-08). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  treatmentItemIds?: string[];
+
   /** Inicio (ISO-8601). */
   @IsDateString()
   startAt!: string;

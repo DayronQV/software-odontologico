@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../../../components/ui/Button';
 import { TextareaField } from '../../../components/ui/Field';
 import { InlineError } from '../../../components/ui/Feedback';
@@ -19,6 +20,7 @@ interface Props {
 export function StatusActions({ appointment: a, onChanged, onReschedule }: Props) {
   const { user } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -42,8 +44,13 @@ export function StatusActions({ appointment: a, onChanged, onReschedule }: Props
     }
   };
 
-  const change = (to: AppointmentStatus, why?: string) =>
-    run(to, () => api(`/agenda/appointments/${a.id}/status`, { method: 'POST', body: { to, reason: why } }), `Cita: ${STATUS_META[to].label.toLowerCase()}`);
+  const isClinical = user?.role === 'ODONTOLOGO' || user?.role === 'ASISTENTE';
+
+  const change = async (to: AppointmentStatus, why?: string) => {
+    await run(to, () => api(`/agenda/appointments/${a.id}/status`, { method: 'POST', body: { to, reason: why } }), `Cita: ${STATUS_META[to].label.toLowerCase()}`);
+    // Al pasar a «En atención», el personal clínico entra directo al expediente de la atención
+    if (to === 'IN_ATTENTION' && isClinical) navigate(`/patients/${a.patient.id}/attention?appointment=${a.id}`);
+  };
 
   const terminal = a.allowedTransitions.length === 0 && !canReschedule;
   if (terminal) return <p className="text-sm text-slate-500">Esta cita ya no admite más cambios.</p>;
@@ -64,6 +71,9 @@ export function StatusActions({ appointment: a, onChanged, onReschedule }: Props
           </Button>
         )}
         {canReschedule && <Button variant="secondary" onClick={onReschedule}>Reprogramar</Button>}
+        {a.status === 'IN_ATTENTION' && isClinical && (
+          <Button variant="secondary" onClick={() => navigate(`/patients/${a.patient.id}/attention?appointment=${a.id}`)}>Abrir atención</Button>
+        )}
         {a.allowedTransitions.includes('CANCELED') && !cancelling && (
           <Button variant="ghost" className="text-rose-700 hover:bg-rose-50" onClick={() => setCancelling(true)}>Cancelar cita</Button>
         )}

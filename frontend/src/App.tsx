@@ -4,6 +4,9 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { AdminLayout } from './features/admin/AdminLayout';
 import { AlertRulesPage } from './features/admin/alerts/AlertRulesPage';
+import { DiscountAuthorizationPage } from './features/admin/budgets/DiscountAuthorizationPage';
+import { ConsentTemplatesPage } from './features/admin/consents/ConsentTemplatesPage';
+import { MedicationsPage } from './features/admin/medications/MedicationsPage';
 import { InsurersPage } from './features/admin/insurers/InsurersPage';
 import { OfficesPage } from './features/admin/offices/OfficesPage';
 import { ProceduresPage } from './features/admin/procedures/ProceduresPage';
@@ -28,12 +31,26 @@ import { AnamnesisTab } from './features/patients/record/AnamnesisTab';
 import { AppointmentsTab } from './features/patients/record/AppointmentsTab';
 import { PatientRecordLayout } from './features/patients/record/PatientRecordLayout';
 import { SummaryTab } from './features/patients/record/SummaryTab';
-import { CASHIERS, PATIENT_STAFF, type Role } from './lib/roles';
+import { CASHIERS, CLINICAL_STAFF, PATIENT_STAFF, type Role } from './lib/roles';
 
 // El calendario (FullCalendar) es lo más pesado: se descarga solo al abrir la Agenda.
 const AgendaPage = lazy(() => import('./features/agenda/AgendaPage').then((m) => ({ default: m.AgendaPage })));
 
+// Las pestañas clínicas se descargan al abrirlas, para que el expediente cargue rápido (RNF-01).
+const AttentionTab = lazy(() => import('./features/clinical/attention/AttentionTab').then((m) => ({ default: m.AttentionTab })));
+const OdontogramTab = lazy(() => import('./features/clinical/odontogram/OdontogramTab').then((m) => ({ default: m.OdontogramTab })));
+const PerioTab = lazy(() => import('./features/clinical/perio/PerioTab').then((m) => ({ default: m.PerioTab })));
+const EvolutionTab = lazy(() => import('./features/clinical/notes/EvolutionTab').then((m) => ({ default: m.EvolutionTab })));
+const ConsentsTab = lazy(() => import('./features/clinical/consents/ConsentsTab').then((m) => ({ default: m.ConsentsTab })));
+const PrescriptionsTab = lazy(() => import('./features/clinical/prescriptions/PrescriptionsTab').then((m) => ({ default: m.PrescriptionsTab })));
+const AttachmentsTab = lazy(() => import('./features/clinical/attachments/AttachmentsTab').then((m) => ({ default: m.AttachmentsTab })));
+const PlanTab = lazy(() => import('./features/treatments/PlanTab').then((m) => ({ default: m.PlanTab })));
+const TimelineTab = lazy(() => import('./features/clinical/timeline/TimelineTab').then((m) => ({ default: m.TimelineTab })));
+
 const guard = (roles: Role[], element: ReactElement) => <ProtectedRoute roles={roles}>{element}</ProtectedRoute>;
+
+/** Pestaña clínica: solo odontólogo y asistente, cargada bajo demanda. */
+const clinicalTab = (element: ReactElement) => guard(CLINICAL_STAFF, <Suspense fallback={<Spinner />}>{element}</Suspense>);
 
 export function App() {
   return (
@@ -61,6 +78,15 @@ export function App() {
           <Route index element={<SummaryTab />} />
           <Route path="anamnesis" element={<AnamnesisTab />} />
           <Route path="appointments" element={<AppointmentsTab />} />
+          <Route path="attention" element={clinicalTab(<AttentionTab />)} />
+          <Route path="odontogram" element={clinicalTab(<OdontogramTab />)} />
+          <Route path="perio" element={clinicalTab(<PerioTab />)} />
+          <Route path="evolution" element={clinicalTab(<EvolutionTab />)} />
+          <Route path="consents" element={clinicalTab(<ConsentsTab />)} />
+          <Route path="prescriptions" element={clinicalTab(<PrescriptionsTab />)} />
+          <Route path="attachments" element={clinicalTab(<AttachmentsTab />)} />
+          <Route path="plan" element={clinicalTab(<PlanTab />)} />
+          <Route path="timeline" element={clinicalTab(<TimelineTab />)} />
         </Route>
         <Route
           path="agenda"
@@ -82,6 +108,9 @@ export function App() {
           <Route path="procedures" element={<ProceduresPage />} />
           <Route path="insurers" element={<InsurersPage />} />
           <Route path="alerts" element={<AlertRulesPage />} />
+          <Route path="consents" element={<ConsentTemplatesPage />} />
+          <Route path="medications" element={<MedicationsPage />} />
+          <Route path="discounts" element={<DiscountAuthorizationPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="audit" element={guard(['ADMIN_TI', 'AUDITOR'], <AuditPage />)} />

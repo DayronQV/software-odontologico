@@ -5,11 +5,14 @@
  */
 export class ApiError extends Error {
   readonly status: number;
+  /** Datos estructurados que acompañan al error (p. ej. las alertas de alergia de una receta). */
+  readonly details?: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, details?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -66,6 +69,10 @@ function extractMessage(body: unknown): string | null {
   return typeof message === 'string' ? message : null;
 }
 
+function extractDetails(body: unknown): unknown {
+  return body && typeof body === 'object' ? (body as { details?: unknown }).details : undefined;
+}
+
 /** Renueva el par de tokens. Varias llamadas simultáneas comparten una sola petición. */
 export function refreshTokens(): Promise<boolean> {
   const refreshToken = tokens.refresh;
@@ -93,22 +100,24 @@ export function refreshTokens(): Promise<boolean> {
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
+  /** Subida de archivos (multipart): el navegador define el Content-Type con su límite. */
+  formData?: FormData;
   /** false para endpoints públicos (login): no envía token ni intenta renovar. */
   auth?: boolean;
 }
 
 /** Envía la petición con el JWT; si el token expiró lo renueva una vez y reintenta. */
 async function request(path: string, options: RequestOptions): Promise<Response> {
-  const { method = 'GET', body, auth = true } = options;
+  const { method = 'GET', body, formData, auth = true } = options;
 
   const send = () =>
     fetch(`/api${path}`, {
       method,
       headers: {
-        'Content-Type': 'application/json',
+        ...(formData ? {} : { 'Content-Type': 'application/json' }),
         ...(auth && tokens.access ? { Authorization: `Bearer ${tokens.access}` } : {}),
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: formData ?? (body === undefined ? undefined : JSON.stringify(body)),
     });
 
   let res = await send();
@@ -136,7 +145,7 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
   const res = await request(path, options);
   if (res.status === 204) return undefined as T;
   const data: unknown = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(res.status, extractMessage(data) ?? res.statusText);
+  if (!res.ok) throw new ApiError(res.status, extractMessage(data) ?? res.statusText, extractDetails(data));
   return data as T;
 }
 

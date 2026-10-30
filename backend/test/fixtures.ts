@@ -112,6 +112,8 @@ export interface AppointmentRequest {
   professionalId: string;
   chairId: string;
   procedureIds: string[];
+  /** Ítems aprobados del plan de tratamiento que se agendan (RF-08). */
+  treatmentItemIds?: string[];
   startAt: string;
   endAt?: string;
   notes?: string;

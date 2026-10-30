@@ -62,13 +62,23 @@ Implícitos a no olvidar: recetas odontológicas, catálogo médico (procedimien
 |---|---|---|
 | 0 | Fundación: Docker, NestJS, React, JWT, RBAC, MFA, sesión 15 min, auditoría inmutable, AES-256, TLS 1.3, files, colas, WSS, seed, tests | ✅ **Completada** |
 | 1 | Pacientes (RF-01/02), agenda (RF-09/10, RN-03), recordatorios (RF-11), POS/facturación simulada (RF-12), caja ciega (RN-02), catálogo médico, usuarios/catálogos Admin | ✅ **Completada** |
-| 2 | Odontograma, periodontograma, SOEP+firma, consentimientos, recetas, presupuestos, adjuntos (RF-03…08, RN-01) | ⏳ Pendiente |
+| 2 | Odontograma, periodontograma, SOEP+firma, consentimientos, recetas, presupuestos, adjuntos (RF-03…08, RN-01) | ✅ **Completada** |
 | 3 | Comisiones (RF-13), descargo de insumos (RF-14), inventario, reportes BI, rol Auditor | ⏳ Pendiente |
 | 4 | UAT, SAST/DAST, carga 150 usuarios, backups, producción, OpenAPI final | ⏳ Pendiente |
 
 Resultados Fase 0: backend 100 pruebas (cobertura ≈ 98 % líneas), frontend 60 pruebas (cobertura ≈ 54 %; el SRS exige 80 % solo en endpoints críticos del backend), lint y tipos limpios. Verificado en Docker: TLS 1.2 rechazado/TLS 1.3 ok, MFA→RBAC→WSS por el gateway, campos cifrados en Postgres, triggers de auditoría, y UI responsive medida en 1920×1080, 1366×768, iPad 10.5" (horizontal y vertical).
 
 Resultados Fase 1: backend 34 suites / 300 pruebas (≈ 95 % líneas), frontend 17 archivos / 120 pruebas, tipos y lint limpios; E2E vivo por Docker (33/33 comprobaciones).
+
+Resultados Fase 2: backend 47 suites / 484 pruebas (≈ 93 % sentencias, 94 % líneas), frontend 24 archivos / 198 pruebas, tipos y lint limpios; verificación en vivo por Docker 30/30 y expediente + odontograma en ≈ 50 ms (RNF-01: < 1,5 s).
+
+### Arquitectura Fase 2
+- Backend: `clinical/` (domain: tooth-notation FDI↔Universal, finding-catalog, perio-calculations, signature SHA-256, note-lock, allergy-check, attachment-validator · odontogram · perio · notes (SOEP, adendas, signos vitales) · procedures (RN-01) · consents · prescriptions · attachments · timeline · shared) · `signing/` (firma del paciente táctil/OTP, reutilizada por consentimientos y aprobación de presupuestos mediante `SigningHandler`) · `treatments/` (planes, presupuestos, aprobación parcial, tareas agendables) · `files/blob-storage.service.ts` (MinIO).
+- Integridad en PostgreSQL (migración `phase2_core_clinico`): hallazgos del odontograma solo se cierran, notas bloqueadas tras `lockAt`, adendas/signos vitales/adjuntos/recetas inmutables, `ProcedureRecord` sin UPDATE ni DELETE, ítems realizados protegidos, periodograma finalizado congelado, `TRUNCATE` bloqueado en tablas clínicas, CHECK de códigos FDI.
+- Roles: todo el contenido clínico es solo de ODONTOLOGO (escribe) y ASISTENTE (lee, vitales y notas propias); recepción solo ve `schedulable-items`; ADMIN_TI mantiene plantillas, medicamentos y autoriza descuentos altos.
+- Texto clínico cifrado AES-256-GCM (`EvolutionNote`, `ClinicalAddendum`, notas de hallazgos/procedimientos/signos, receta, texto del consentimiento).
+- Frontend: `features/clinical/{odontogram,perio,notes,procedures,consents,signing,prescriptions,attachments,timeline,attention,shared}` y `features/treatments`; pestañas clínicas cargadas bajo demanda (lazy).
+- Trampas: (1) `Modal` guarda `onClose` en una ref: si fuera dependencia del efecto, el foco volvía al diálogo con cada tecla; (2) `AgendaPage` solo actualiza el rango si cambió (FullCalendar avisa en cada render → bucle); (3) `api()` acepta `formData` para subidas y `ApiError.details` para datos estructurados (alertas de alergia); (4) `TRUNCATE` no dispara triggers por fila: hay triggers `BEFORE TRUNCATE`; (5) un periodontograma finalizado no admite inserts: crear el examen y finalizar después.
 
 ### Arquitectura Fase 1
 - Backend (`src/`): `catalog` (consultorios, sillones, profesionales+horarios, procedimientos, aseguradoras, parámetros, reglas de alerta) · `patients` (ficha, tutor, emergencia, seguro, anamnesis, alertas críticas) · `agenda` (citas, máquina de estados RF-10, disponibilidad) · `notifications` (recordatorios 48/24 h con BullMQ, plantillas, historial) · `billing` (POS en centavos, comprobantes, notas de crédito, caja ciega RN-02) · `integrations` (`FiscalInvoiceProvider`, `PaymentGateway`, `MessagingChannel`: WhatsApp/SMS simulados, Email real a Mailpit) · `common` (paginación, dinero, hora local `America/Bogota`, errores Prisma).

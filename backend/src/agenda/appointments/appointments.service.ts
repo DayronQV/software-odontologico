@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { AppointmentOrigin, TreatmentItemStatus } from '@prisma/client';
 import { isExclusionViolation } from '../../common/prisma-errors';
 import type { AuthUser } from '../../common/types';
 import { RemindersService } from '../../notifications/reminders/reminders.service';
@@ -24,6 +25,8 @@ export class AppointmentsService {
 
   async create(dto: CreateAppointmentDto, user: AuthUser) {
     const procedures = await this.loadProcedures(dto.procedureIds);
+    const treatmentItemIds = dto.treatmentItemIds ?? [];
+    await this.assertSchedulableItems(treatmentItemIds, dto.patientId, dto.procedureIds);
     const startAt = new Date(dto.startAt);
     const endAt = dto.endAt
       ? new Date(dto.endAt)
@@ -49,9 +52,17 @@ export class AppointmentsService {
             endAt,
             notes: dto.notes?.trim(),
             createdById: user.id,
+            origin: treatmentItemIds.length > 0 ? AppointmentOrigin.TREATMENT_BUDGET : AppointmentOrigin.MANUAL,
             procedures: { create: procedures.map((p) => ({ procedureId: p.id })) },
           },
         });
+        if (treatmentItemIds.length > 0) {
+          // RF-08: el ítem aprobado queda vinculado a la cita
+          await tx.treatmentItem.updateMany({
+            where: { id: { in: treatmentItemIds }, status: TreatmentItemStatus.APPROVED },
+            data: { status: TreatmentItemStatus.SCHEDULED, appointmentId: appointment.id },
+          });
+        }
         await tx.appointmentStatusLog.create({
           data: {
             appointmentId: appointment.id,
@@ -121,6 +132,24 @@ export class AppointmentsService {
     await this.reminders.onAppointmentRescheduled(id);
     this.events.publish('updated', view);
     return view;
+  }
+
+  /** Solo se agendan ítems que el paciente ya aprobó, del mismo paciente y con su procedimiento incluido. */
+  private async assertSchedulableItems(itemIds: string[], patientId: string, procedureIds: string[]) {
+    if (itemIds.length === 0) return;
+    const items = await this.prisma.db.treatmentItem.findMany({
+      where: { id: { in: itemIds }, phase: { plan: { patientId } } },
+      select: { status: true, procedureId: true },
+    });
+    if (items.length !== itemIds.length) {
+      throw new BadRequestException('Algún ítem del plan no existe o no pertenece al paciente');
+    }
+    if (items.some((item) => item.status !== TreatmentItemStatus.APPROVED)) {
+      throw new ConflictException('Solo se pueden agendar ítems aprobados por el paciente y sin cita');
+    }
+    if (items.some((item) => !procedureIds.includes(item.procedureId))) {
+      throw new BadRequestException('Los procedimientos de la cita deben incluir los de los ítems elegidos');
+    }
   }
 
   private async loadProcedures(ids: string[]) {

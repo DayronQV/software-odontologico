@@ -7,6 +7,9 @@ export const ALL_ROLES: Role[] = ['ADMIN_TI', 'RECEPCIONISTA', 'ODONTOLOGO', 'AS
 /** Personal con acceso a datos de pacientes (el administrador de TI y el auditor NO). */
 export const PATIENT_STAFF: Role[] = ['RECEPCIONISTA', 'ODONTOLOGO', 'ASISTENTE'];
 
+/** Contenido clínico completo (odontograma, evolución, recetas…): recepción NO accede. */
+export const CLINICAL_STAFF: Role[] = ['ODONTOLOGO', 'ASISTENTE'];
+
 /** Operación de caja y facturación. */
 export const CASHIERS: Role[] = ['RECEPCIONISTA', 'ADMIN_TI'];
 

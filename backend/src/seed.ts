@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { createSeedContext } from './seed/seed-context';
 import { seedCatalog } from './seed/seed-catalog';
+import { seedClinicalCatalog, seedClinicalDemo } from './seed/seed-clinical';
 import { seedPatients } from './seed/seed-patients';
 import { SEED_USERS, seedUsers } from './seed/seed-users';
 
@@ -20,7 +21,9 @@ async function main(): Promise<void> {
     await seedUsers(context, password);
     await seedCatalog(context);
     await seedPatients(context);
-    console.log(`Seed listo: ${SEED_USERS.length} usuarios, catálogo y pacientes de demostración`);
+    await seedClinicalCatalog(context);
+    await seedClinicalDemo(context);
+    console.log(`Seed listo: ${SEED_USERS.length} usuarios, catálogo, pacientes y expediente clínico de demostración`);
   } finally {
     await context.prisma.$disconnect();
   }

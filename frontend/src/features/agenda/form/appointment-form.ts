@@ -9,6 +9,8 @@ export interface AppointmentFormValues {
   start: string;
   durationMinutes: number;
   notes: string;
+  /** Ítems aprobados del plan de tratamiento que se agendan en la cita (RF-08). */
+  treatmentItemIds?: string[];
 }
 
 export type AppointmentFormErrors = Partial<Record<keyof AppointmentFormValues, string>>;
@@ -39,6 +41,7 @@ export function buildAppointmentPayload(values: AppointmentFormValues) {
     startAt,
     endAt,
     notes: values.notes.trim() || undefined,
+    treatmentItemIds: values.treatmentItemIds?.length ? values.treatmentItemIds : undefined,
   };
 }
 

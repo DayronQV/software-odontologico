@@ -19,7 +19,7 @@ const METHOD_ACTIONS: Record<string, string> = {
 // Credenciales, texto de búsqueda (`q` puede ser un documento) y datos personales/clínicos:
 // el log de auditoría registra QUIÉN accedió a QUÉ registro, no copia información del paciente.
 const SENSITIVE_KEY =
-  /pass|secret|token|code|pin|hash|document|^q$|allerg|disease|medication|history|name|phone|mail|address|birth|notes|occupation|reference|reason/i;
+  /pass|secret|token|code|pin|hash|document|^q$|allerg|disease|medication|history|name|phone|mail|address|birth|notes|occupation|reference|reason|subjective|objective|assessment|plan|content|signature|image|diagnosis|instruction|dose|text|body/i;
 const MAX_DEPTH = 5;
 
 function redact(value: unknown, depth: number): unknown {

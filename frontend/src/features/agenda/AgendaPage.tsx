@@ -36,6 +36,17 @@ export function AgendaPage() {
 
   const isReception = user?.role === 'RECEPCIONISTA';
 
+  // FullCalendar avisa el rango visible en cada actualización: solo se guarda si realmente cambió,
+  // de lo contrario cada aviso provocaba otro render y un bucle infinito.
+  const changeRange = useCallback(
+    (from: Date, to: Date) =>
+      setRange((current) => {
+        const next = { from: from.toISOString(), to: to.toISOString() };
+        return current && current.from === next.from && current.to === next.to ? current : next;
+      }),
+    [],
+  );
+
   const loader = useCallback(
     () => (range ? api<Appointment[]>(`/agenda/appointments${buildQuery({ ...range, ...filters })}`) : Promise.resolve([] as Appointment[])),
     [range, filters],
@@ -91,7 +102,7 @@ export function AgendaPage() {
           opensAtMinute={settings.opensAtMinute}
           closesAtMinute={settings.closesAtMinute}
           canCreate={isReception}
-          onRangeChange={(from, to) => setRange({ from: from.toISOString(), to: to.toISOString() })}
+          onRangeChange={changeRange}
           onSelectSlot={(start, end) => setForm({ start, end })}
           onSelectAppointment={(a) => setSelectedId(a.id)}
         />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Field, SelectField, TextareaField } from '../../../components/ui/Field';
 import { InlineError } from '../../../components/ui/Feedback';
@@ -6,7 +6,7 @@ import { Modal } from '../../../components/ui/Modal';
 import { useToast } from '../../../components/ui/Toast';
 import { api } from '../../../lib/api';
 import { formatMoney, toLocalInputValue } from '../../../lib/format';
-import { errorMessage } from '../../../lib/useResource';
+import { errorMessage, useResource } from '../../../lib/useResource';
 import { useSettings } from '../../catalog/SettingsProvider';
 import { useOffices, useProcedures, useProfessionals } from '../../catalog/useCatalog';
 import { PatientPicker, type PickedPatient } from '../../patients/PatientPicker';
@@ -16,6 +16,16 @@ import {
   validateAppointmentForm,
   type AppointmentFormErrors,
 } from './appointment-form';
+
+interface SchedulableItem {
+  id: string;
+  procedure: { id: string; name: string };
+  toothCode: number | null;
+  sessionNumber: number | null;
+  status: 'APPROVED' | 'SCHEDULED';
+  planTitle: string;
+  phaseName: string;
+}
 
 export interface AppointmentFormState {
   start?: Date;
@@ -42,6 +52,7 @@ export function AppointmentFormModal({ state, onClose, onSaved }: Props) {
   const [officeId, setOfficeId] = useState('');
   const [chairId, setChairId] = useState('');
   const [procedureIds, setProcedureIds] = useState<string[]>([]);
+  const [itemIds, setItemIds] = useState<string[]>([]);
   const [start, setStart] = useState('');
   const [duration, setDuration] = useState(30);
   const [durationTouched, setDurationTouched] = useState(false);
@@ -57,6 +68,7 @@ export function AppointmentFormModal({ state, onClose, onSaved }: Props) {
     setOfficeId('');
     setChairId('');
     setProcedureIds([]);
+    setItemIds([]);
     setNotes('');
     setErrors({});
     setServerError(null);
@@ -68,6 +80,28 @@ export function AppointmentFormModal({ state, onClose, onSaved }: Props) {
     if (state.end && state.start) setDurationTouched(true);
   }, [state]);
 
+  // Tareas agendables (RF-08): ítems del plan que el paciente ya aprobó
+  const patientId = patient?.id;
+  const itemsLoader = useCallback(
+    async () => (patientId ? await api<SchedulableItem[]>(`/patients/${patientId}/schedulable-items`).catch(() => []) : []),
+    [patientId],
+  );
+  const { data: schedulable } = useResource(itemsLoader);
+
+  useEffect(() => {
+    setItemIds([]);
+  }, [patientId]);
+
+  const toggleItem = (item: SchedulableItem) => {
+    const selected = itemIds.includes(item.id);
+    setItemIds(selected ? itemIds.filter((id) => id !== item.id) : [...itemIds, item.id]);
+    if (!selected && !procedureIds.includes(item.procedure.id)) {
+      const next = [...procedureIds, item.procedure.id];
+      setProcedureIds(next);
+      if (!durationTouched) setDuration(suggestedDuration(procedures ?? [], next));
+    }
+  };
+
   const chairs = useMemo(() => (offices ?? []).find((o) => o.id === officeId)?.chairs.filter((c) => c.active) ?? [], [offices, officeId]);
 
   const toggleProcedure = (id: string) => {
@@ -77,7 +111,7 @@ export function AppointmentFormModal({ state, onClose, onSaved }: Props) {
   };
 
   const submit = async () => {
-    const values = { patientId: patient?.id ?? '', professionalId, chairId, procedureIds, start, durationMinutes: duration, notes };
+    const values = { patientId: patient?.id ?? '', professionalId, chairId, procedureIds, start, durationMinutes: duration, notes, treatmentItemIds: itemIds };
     const found = validateAppointmentForm(values);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
@@ -117,6 +151,32 @@ export function AppointmentFormModal({ state, onClose, onSaved }: Props) {
           </SelectField>
           <Field label="Inicio" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} error={errors.start} />
         </div>
+
+        {schedulable && schedulable.length > 0 && (
+          <fieldset className="rounded-xl border border-brand-200 bg-brand-50/40 p-3">
+            <legend className="px-1 text-sm font-medium text-brand-900">Tratamientos aprobados por agendar</legend>
+            <ul className="space-y-1">
+              {schedulable.map((item) => (
+                <li key={item.id}>
+                  <label className={`flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 ${item.status === 'SCHEDULED' ? 'opacity-60' : 'cursor-pointer hover:bg-white'}`}>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded border-line text-brand-600"
+                      disabled={item.status === 'SCHEDULED'}
+                      checked={itemIds.includes(item.id)}
+                      onChange={() => toggleItem(item)}
+                    />
+                    <span className="flex-1 text-sm text-slate-800">
+                      {item.procedure.name}{item.toothCode ? ` · diente ${item.toothCode}` : ''}
+                      <span className="block text-xs text-slate-500">{item.planTitle} · {item.phaseName}{item.sessionNumber ? ` · sesión ${item.sessionNumber}` : ''}</span>
+                    </span>
+                    {item.status === 'SCHEDULED' && <span className="text-xs text-slate-500">Ya agendado</span>}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
+        )}
 
         <fieldset>
           <legend className="mb-1.5 text-sm font-medium text-slate-700">Procedimientos</legend>

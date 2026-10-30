@@ -65,4 +65,11 @@ export class UpdateSettingsDto {
   @Min(0)
   @Max(100)
   maxDiscountPercent?: number;
+
+  /** Horas durante las que una nota de evolución sigue siendo editable (RF-05). Por defecto 24. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(720)
+  noteLockHours?: number;
 }

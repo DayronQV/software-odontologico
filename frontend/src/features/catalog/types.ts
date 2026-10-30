@@ -59,6 +59,8 @@ export interface ClinicSettings {
   closesAtMinute: number;
   reminderHours: number[];
   maxDiscountPercent: number;
+  /** Horas durante las que una nota de evolución sigue siendo editable. */
+  noteLockHours: number;
 }
 
 export type AlertKind = 'DRUG_ALLERGY' | 'SYSTEMIC_DISEASE' | 'COAGULOPATHY' | 'ANTICOAGULANT';

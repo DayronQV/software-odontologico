@@ -18,6 +18,7 @@ const schema = z
     currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Código de 3 letras (USD, COP…)'),
     taxRatePercent: z.number({ message: 'Ingrese un número' }).min(0).max(100),
     maxDiscountPercent: z.number({ message: 'Ingrese un número' }).min(0).max(100),
+    noteLockHours: z.number({ message: 'Ingrese un número' }).int('Use horas enteras').min(0).max(720),
     opensAt: z.string().regex(/^\d{2}:\d{2}$/, 'Hora inválida'),
     closesAt: z.string().regex(/^\d{2}:\d{2}$/, 'Hora inválida'),
     reminderHours: z
@@ -47,6 +48,7 @@ export function SettingsPage() {
       currency: settings.currency,
       taxRatePercent: settings.taxRatePercent,
       maxDiscountPercent: settings.maxDiscountPercent,
+      noteLockHours: settings.noteLockHours,
       opensAt: minutesToClock(settings.opensAtMinute),
       closesAt: minutesToClock(settings.closesAtMinute),
       reminderHours: settings.reminderHours.join(', '),
@@ -63,6 +65,7 @@ export function SettingsPage() {
           currency: v.currency,
           taxRatePercent: v.taxRatePercent,
           maxDiscountPercent: v.maxDiscountPercent,
+          noteLockHours: v.noteLockHours,
           opensAtMinute: clockToMinutes(v.opensAt),
           closesAtMinute: clockToMinutes(v.closesAt),
           reminderHours: [...new Set(v.reminderHours.split(',').map((h) => Number(h.trim())))],
@@ -97,6 +100,12 @@ export function SettingsPage() {
       <Card title="Recordatorios" description="Cuántas horas antes de la cita se avisa al paciente.">
         <div className="max-w-sm">
           <Field label="Horas de antelación" placeholder="48, 24" error={errors.reminderHours?.message} {...register('reminderHours')} />
+        </div>
+      </Card>
+
+      <Card title="Historia clínica" description="Las notas de evolución se pueden editar durante este plazo; después solo se corrigen con una adenda firmada.">
+        <div className="max-w-sm">
+          <Field label="Plazo de edición de notas (horas)" type="number" hint="24 por defecto." error={errors.noteLockHours?.message} {...register('noteLockHours', { valueAsNumber: true })} />
         </div>
       </Card>
 

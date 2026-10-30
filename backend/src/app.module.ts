@@ -9,6 +9,9 @@ import { PatientsModule } from './patients/patients.module';
 import { AgendaModule } from './agenda/agenda.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { BillingModule } from './billing/billing.module';
+import { ClinicalModule } from './clinical/clinical.module';
+import { SigningModule } from './signing/signing.module';
+import { TreatmentsModule } from './treatments/treatments.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { DEFAULT_THROTTLE } from './common/throttle';
@@ -37,6 +40,9 @@ import { UsersModule } from './users/users.module';
     AgendaModule,
     NotificationsModule,
     BillingModule,
+    SigningModule,
+    ClinicalModule,
+    TreatmentsModule,
     FilesModule,
     QueueModule,
     RealtimeModule,

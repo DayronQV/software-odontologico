@@ -11,6 +11,7 @@ const DEFAULTS: ClinicSettings = {
   closesAtMinute: 1260,
   reminderHours: [48, 24],
   maxDiscountPercent: 10,
+  noteLockHours: 24,
 };
 
 interface SettingsContextValue {

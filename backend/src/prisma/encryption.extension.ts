@@ -21,6 +21,15 @@ export const ENCRYPTED_FIELDS: Record<string, string[]> = {
     'surgicalHistory',
     'currentMedication',
   ],
+  // Fase 2: texto clínico libre
+  EvolutionNote: ['subjective', 'objective', 'assessment', 'plan'],
+  ClinicalAddendum: ['content'],
+  ProcedureRecord: ['notes'],
+  VitalSigns: ['notes'],
+  OdontogramFinding: ['notes'],
+  PerioChart: ['notes'],
+  Prescription: ['diagnosis', 'notes'],
+  PatientConsent: ['renderedText'],
 };
 
 const WRITE_OPERATIONS = new Set([

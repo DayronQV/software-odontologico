@@ -1,6 +1,7 @@
 // SIGO-Dental — esquema de datos
 // Fase 0: usuarios, MFA, sesiones, auditoría
 // Fase 1: catálogo, pacientes, agenda, notificaciones, facturación y caja
+// Fase 2: odontograma, periodontograma, evolución SOEP, consentimientos, recetas, adjuntos, presupuestos
 
 generator client {
   provider      = "prisma-client-js"
@@ -114,6 +115,105 @@ enum CashSessionStatus {
 
 enum CashMovementType {
   REFUND
+}
+
+// ----- Fase 2 -----
+
+enum OdontogramDentition {
+  PERMANENT
+  PRIMARY
+  MIXED
+}
+
+/// WHOLE = diente completo (implante, exodoncia, prótesis…).
+enum ToothSurface {
+  MESIAL
+  DISTAL
+  OCCLUSAL
+  VESTIBULAR
+  LINGUAL
+  WHOLE
+}
+
+/// Catálogo visual estandarizado del odontograma (RF-03).
+enum FindingType {
+  CARIES
+  RESTORATION
+  ENDODONTICS_DONE
+  ENDODONTICS_REQUIRED
+  IMPLANT
+  PROSTHESIS_FIXED
+  PROSTHESIS_REMOVABLE
+  EXTRACTION
+  SEALANT
+}
+
+enum FindingStatus {
+  EXISTING
+  PLANNED
+  DONE
+}
+
+/// Los 6 puntos de sondaje por diente (RF-04): vestibular y lingual × mesial, medio, distal.
+enum PerioSite {
+  V_MESIAL
+  V_MIDDLE
+  V_DISTAL
+  L_MESIAL
+  L_MIDDLE
+  L_DISTAL
+}
+
+enum NoteKind {
+  SOEP
+  ASSISTANT
+}
+
+enum SigningPurpose {
+  CONSENT
+  BUDGET_APPROVAL
+}
+
+enum SigningStatus {
+  PENDING
+  SIGNED
+}
+
+enum SigningMethod {
+  TOUCH
+  OTP
+}
+
+enum AttachmentKind {
+  XRAY
+  PHOTO
+  DOCUMENT
+}
+
+enum PrescriptionStatus {
+  ISSUED
+  VOIDED
+}
+
+enum PlanStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum TreatmentItemStatus {
+  PENDING
+  APPROVED
+  SCHEDULED
+  DONE
+  CANCELED
+}
+
+enum BudgetStatus {
+  PENDING_AUTHORIZATION
+  OPEN
+  PARTIALLY_APPROVED
+  APPROVED
+  SUPERSEDED
 }
 
 // =====================================================================================
@@ -269,8 +369,12 @@ model Procedure {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  appointments AppointmentProcedure[]
-  invoiceLines InvoiceLine[]
+  appointments     AppointmentProcedure[]
+  invoiceLines     InvoiceLine[]
+  records          ProcedureRecord[]
+  consentTemplates ConsentTemplate[]
+  consents         PatientConsent[]
+  treatmentItems   TreatmentItem[]
 
   @@index([name])
   @@index([category])
@@ -299,6 +403,8 @@ model ClinicSettings {
   reminderHours      Int[]
   /// Descuento máximo que puede aplicar recepción sin autorización del administrador.
   maxDiscountPercent Decimal  @db.Decimal(5, 2)
+  /// Horas durante las que una nota de evolución sigue siendo editable (RF-05). Por defecto 24.
+  noteLockHours      Int      @default(24)
   updatedAt          DateTime @updatedAt
 }
 
@@ -343,6 +449,18 @@ model Patient {
   medicalHistory   MedicalHistory?
   appointments     Appointment[]
   invoices         Invoice[]
+
+  odontogram       Odontogram?
+  perioCharts      PerioChart[]
+  evolutionNotes   EvolutionNote[]
+  addenda          ClinicalAddendum[]
+  procedureRecords ProcedureRecord[]
+  vitalSigns       VitalSigns[]
+  signingRequests  SigningRequest[]
+  consents         PatientConsent[]
+  prescriptions    Prescription[]
+  attachments      Attachment[]
+  treatmentPlans   TreatmentPlan[]
 
   @@index([lastName, firstName])
 }
@@ -421,14 +539,15 @@ model Appointment {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  patient       Patient                @relation(fields: [patientId], references: [id])
-  professional  Professional           @relation(fields: [professionalId], references: [id])
-  chair         Chair                  @relation(fields: [chairId], references: [id])
-  createdBy     User                   @relation("AppointmentCreator", fields: [createdById], references: [id])
-  procedures    AppointmentProcedure[]
-  statusLogs    AppointmentStatusLog[]
-  notifications NotificationLog[]
-  invoices      Invoice[]
+  patient        Patient                @relation(fields: [patientId], references: [id])
+  professional   Professional           @relation(fields: [professionalId], references: [id])
+  chair          Chair                  @relation(fields: [chairId], references: [id])
+  createdBy      User                   @relation("AppointmentCreator", fields: [createdById], references: [id])
+  procedures     AppointmentProcedure[]
+  statusLogs     AppointmentStatusLog[]
+  notifications  NotificationLog[]
+  invoices       Invoice[]
+  treatmentItems TreatmentItem[]
 
   @@index([startAt])
   @@index([chairId, startAt])
@@ -637,4 +756,456 @@ model CreditNote {
   createdAt       DateTime     @default(now())
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+// =====================================================================================
+// Fase 2 — odontograma (RF-03)
+// =====================================================================================
+
+model Odontogram {
+  id        String              @id @default(uuid())
+  patientId String              @unique
+  dentition OdontogramDentition @default(PERMANENT)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  patient  Patient             @relation(fields: [patientId], references: [id])
+  findings OdontogramFinding[]
+}
+
+/// Hallazgo por diente y superficie. Es de solo anexar: corregir o quitar un hallazgo lo CIERRA
+/// (removedAt) y, si corresponde, crea uno nuevo; así se conserva el historial y la consulta por fecha.
+model OdontogramFinding {
+  id            String        @id @default(uuid())
+  odontogramId  String
+  /// Código FDI (11–48 permanentes, 51–85 temporales).
+  toothCode     Int
+  surface       ToothSurface
+  type          FindingType
+  status        FindingStatus @default(EXISTING)
+  notes         String?
+  createdById   String
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  removedById   String?
+  removedAt     DateTime?     @db.Timestamptz(3)
+  removalReason String?
+  /// Hallazgo al que reemplaza (cambio de estado o de tipo).
+  replacesId    String?
+
+  odontogram Odontogram @relation(fields: [odontogramId], references: [id])
+
+  @@index([odontogramId, removedAt])
+  @@index([odontogramId, toothCode])
+}
+
+// =====================================================================================
+// Fase 2 — periodontograma (RF-04)
+// =====================================================================================
+
+model PerioChart {
+  id          String    @id @default(uuid())
+  patientId   String
+  examinerId  String
+  examinedAt  DateTime  @default(now()) @db.Timestamptz(3)
+  notes       String?
+  /// Un examen finalizado ya no se modifica (se registra uno nuevo para ver la evolución).
+  finalizedAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now())
+
+  patient Patient            @relation(fields: [patientId], references: [id])
+  sites   PerioSiteReading[]
+  teeth   PerioTooth[]
+
+  @@index([patientId, examinedAt])
+}
+
+model PerioSiteReading {
+  id             String    @id @default(uuid())
+  chartId        String
+  toothCode      Int
+  site           PerioSite
+  /// Profundidad al sondaje (mm).
+  probingDepth   Int
+  /// Recesión (mm): positivo = margen apical a la unión cemento-esmalte; negativo = margen coronal.
+  gingivalMargin Int       @default(0)
+  bleeding       Boolean   @default(false)
+
+  chart PerioChart @relation(fields: [chartId], references: [id])
+
+  @@unique([chartId, toothCode, site])
+}
+
+model PerioTooth {
+  chartId   String
+  toothCode Int
+  /// Furca: 0 = sin compromiso, 1–3 = grados I–III.
+  furcation Int    @default(0)
+  /// Movilidad: 0–3.
+  mobility  Int    @default(0)
+
+  chart PerioChart @relation(fields: [chartId], references: [id])
+
+  @@id([chartId, toothCode])
+}
+
+// =====================================================================================
+// Fase 2 — evolución clínica (RF-05, RN-01)
+// =====================================================================================
+
+/// Nota SOEP (Subjetivo, Objetivo, Evaluación, Plan) o nota del asistente. Los textos se guardan cifrados.
+model EvolutionNote {
+  id                String    @id @default(uuid())
+  patientId         String
+  appointmentId     String?
+  procedureRecordId String?
+  authorId          String
+  kind              NoteKind  @default(SOEP)
+  subjective        String
+  objective         String
+  assessment        String
+  plan              String
+  /// Fin del plazo de edición, fijado al crear la nota con el parámetro vigente (24 h por defecto).
+  lockAt            DateTime  @db.Timestamptz(3)
+  signedAt          DateTime? @db.Timestamptz(3)
+  signedById        String?
+  /// SHA-256 del contenido en el momento de la firma.
+  contentHash       String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt
+
+  patient Patient            @relation(fields: [patientId], references: [id])
+  addenda ClinicalAddendum[]
+
+  @@index([patientId, createdAt])
+}
+
+/// Adenda firmada: única vía de corregir una nota bloqueada o un procedimiento realizado (RN-01).
+model ClinicalAddendum {
+  id                String   @id @default(uuid())
+  patientId         String
+  noteId            String?
+  procedureRecordId String?
+  authorId          String
+  content           String
+  signedAt          DateTime @db.Timestamptz(3)
+  contentHash       String
+  createdAt         DateTime @default(now())
+
+  patient         Patient          @relation(fields: [patientId], references: [id])
+  note            EvolutionNote?   @relation(fields: [noteId], references: [id])
+  procedureRecord ProcedureRecord? @relation(fields: [procedureRecordId], references: [id])
+
+  @@index([noteId])
+  @@index([procedureRecordId])
+}
+
+/// Procedimiento REALIZADO. Nunca se modifica ni se borra (RN-01): solo se corrige con adenda.
+model ProcedureRecord {
+  id              String        @id @default(uuid())
+  patientId       String
+  procedureId     String
+  appointmentId   String?
+  performedById   String
+  toothCode       Int?
+  surface         ToothSurface?
+  notes           String?
+  treatmentItemId String?       @unique
+  performedAt     DateTime      @default(now()) @db.Timestamptz(3)
+
+  patient       Patient            @relation(fields: [patientId], references: [id])
+  procedure     Procedure          @relation(fields: [procedureId], references: [id])
+  treatmentItem TreatmentItem?     @relation(fields: [treatmentItemId], references: [id])
+  addenda       ClinicalAddendum[]
+
+  @@index([patientId, performedAt])
+}
+
+model VitalSigns {
+  id               String   @id @default(uuid())
+  patientId        String
+  appointmentId    String?
+  recordedById     String
+  systolic         Int?
+  diastolic        Int?
+  pulse            Int?
+  temperatureC     Decimal? @db.Decimal(4, 1)
+  oxygenSaturation Int?
+  weightKg         Decimal? @db.Decimal(5, 2)
+  notes            String?
+  recordedAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId, recordedAt])
+}
+
+// =====================================================================================
+// Fase 2 — firma del paciente, consentimientos y aprobaciones (RF-06, RF-08)
+// =====================================================================================
+
+/// Captura de la firma del paciente (o su tutor): en pantalla táctil o con código OTP.
+/// La reutilizan los consentimientos y la aprobación de presupuestos.
+model SigningRequest {
+  id                String         @id @default(uuid())
+  patientId         String
+  purpose           SigningPurpose
+  status            SigningStatus  @default(PENDING)
+  method            SigningMethod?
+  signerName        String?
+  /// PACIENTE o TUTOR (menores de edad).
+  signerRelation    String?
+  otpHash           String?
+  otpExpiresAt      DateTime?      @db.Timestamptz(3)
+  otpAttempts       Int            @default(0)
+  otpSentTo         String?
+  signatureImageKey String?
+  signatureMeta     Json?
+  evidenceHash      String?
+  signedAt          DateTime?      @db.Timestamptz(3)
+  signedIp          String?
+  createdById       String
+  createdAt         DateTime       @default(now())
+
+  patient  Patient         @relation(fields: [patientId], references: [id])
+  consent  PatientConsent?
+  approval BudgetApproval?
+
+  @@index([patientId, status])
+}
+
+/// Texto legal versionado por procedimiento; editarlo crea una versión nueva.
+model ConsentTemplate {
+  id          String   @id @default(uuid())
+  procedureId String
+  version     Int
+  title       String
+  body        String
+  active      Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  procedure Procedure        @relation(fields: [procedureId], references: [id])
+  consents  PatientConsent[]
+
+  @@unique([procedureId, version])
+}
+
+model PatientConsent {
+  id              String   @id @default(uuid())
+  patientId       String
+  templateId      String
+  procedureId     String
+  /// Odontólogo responsable (User.id).
+  professionalId  String
+  appointmentId   String?
+  treatmentItemId String?
+  /// Texto exacto presentado al firmar (con los datos ya completados).
+  renderedText    String
+  signingId       String   @unique
+  pdfKey          String?
+  pdfHash         String?
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  patient   Patient         @relation(fields: [patientId], references: [id])
+  template  ConsentTemplate @relation(fields: [templateId], references: [id])
+  procedure Procedure       @relation(fields: [procedureId], references: [id])
+  signing   SigningRequest  @relation(fields: [signingId], references: [id])
+
+  @@index([patientId, procedureId])
+}
+
+// =====================================================================================
+// Fase 2 — recetas (catálogo de medicamentos, receta inmutable)
+// =====================================================================================
+
+model Medication {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  activeIngredient String
+  presentation     String
+  /// Familias/ingredientes para cruzar con las alergias de la anamnesis (p. ej. "penicilina").
+  allergyGroups    String[]
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  items PrescriptionItem[]
+}
+
+model Prescription {
+  id                    String             @id @default(uuid())
+  number                Int                @unique @default(autoincrement())
+  patientId             String
+  prescriberId          String
+  appointmentId         String?
+  diagnosis             String?
+  notes                 String?
+  status                PrescriptionStatus @default(ISSUED)
+  /// Si se emitió pese a una alerta de alergia: justificación del profesional.
+  allergyOverrideReason String?
+  voidedAt              DateTime?          @db.Timestamptz(3)
+  voidedById            String?
+  voidReason            String?
+  issuedAt              DateTime           @default(now()) @db.Timestamptz(3)
+
+  patient Patient            @relation(fields: [patientId], references: [id])
+  items   PrescriptionItem[]
+
+  @@index([patientId, issuedAt])
+}
+
+model PrescriptionItem {
+  id             String  @id @default(uuid())
+  prescriptionId String
+  medicationId   String?
+  name           String
+  dose           String
+  frequency      String
+  duration       String
+  instructions   String?
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+  medication   Medication?  @relation(fields: [medicationId], references: [id])
+}
+
+// =====================================================================================
+// Fase 2 — adjuntos (radiografías, fotos, PDFs)
+// =====================================================================================
+
+model Attachment {
+  id            String         @id @default(uuid())
+  patientId     String
+  appointmentId String?
+  kind          AttachmentKind
+  filename      String
+  contentType   String
+  sizeBytes     Int
+  storageKey    String         @unique
+  sha256        String
+  description   String?
+  uploadedById  String
+  createdAt     DateTime       @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId, createdAt])
+}
+
+// =====================================================================================
+// Fase 2 — planes de tratamiento y presupuestos (RF-07, RF-08)
+// =====================================================================================
+
+model TreatmentPlan {
+  id          String     @id @default(uuid())
+  patientId   String
+  title       String
+  status      PlanStatus @default(ACTIVE)
+  createdById String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  patient Patient          @relation(fields: [patientId], references: [id])
+  phases  TreatmentPhase[]
+  budgets Budget[]
+
+  @@index([patientId])
+}
+
+model TreatmentPhase {
+  id       String @id @default(uuid())
+  planId   String
+  name     String
+  position Int
+
+  plan  TreatmentPlan   @relation(fields: [planId], references: [id])
+  items TreatmentItem[]
+
+  @@index([planId, position])
+}
+
+model TreatmentItem {
+  id            String              @id @default(uuid())
+  phaseId       String
+  procedureId   String
+  toothCode     Int?
+  surface       ToothSurface?
+  sessionNumber Int?
+  /// Honorarios y costo de laboratorio de este ítem (copiados del catálogo, editables).
+  fee           Decimal             @db.Decimal(12, 2)
+  labCost       Decimal             @default(0) @db.Decimal(12, 2)
+  status        TreatmentItemStatus @default(PENDING)
+  /// Hallazgo del odontograma que originó el ítem.
+  findingId     String?
+  /// Cita en la que se agendó (RF-08).
+  appointmentId String?
+  approvedAt    DateTime?           @db.Timestamptz(3)
+  createdAt     DateTime            @default(now())
+
+  phase       TreatmentPhase   @relation(fields: [phaseId], references: [id])
+  procedure   Procedure        @relation(fields: [procedureId], references: [id])
+  appointment Appointment?     @relation(fields: [appointmentId], references: [id])
+  record      ProcedureRecord?
+  budgetLines BudgetLine[]
+
+  @@index([phaseId])
+  @@index([appointmentId])
+  @@index([status])
+}
+
+/// Cada versión es una foto (snapshot) del plan en ese momento.
+model Budget {
+  id                        String       @id @default(uuid())
+  planId                    String
+  version                   Int
+  status                    BudgetStatus @default(OPEN)
+  subtotalFees              Decimal      @db.Decimal(12, 2)
+  subtotalLab               Decimal      @db.Decimal(12, 2)
+  discountPercent           Decimal      @default(0) @db.Decimal(5, 2)
+  discountAmount            Decimal      @default(0) @db.Decimal(12, 2)
+  total                     Decimal      @db.Decimal(12, 2)
+  discountAuthorizedById    String?
+  discountAuthorizedAt      DateTime?    @db.Timestamptz(3)
+  discountAuthorizationNote String?
+  createdById               String
+  createdAt                 DateTime     @default(now())
+
+  plan      TreatmentPlan    @relation(fields: [planId], references: [id])
+  lines     BudgetLine[]
+  approvals BudgetApproval[]
+
+  @@unique([planId, version])
+}
+
+model BudgetLine {
+  id            String  @id @default(uuid())
+  budgetId      String
+  itemId        String
+  phaseName     String
+  phasePosition Int
+  description   String
+  toothCode     Int?
+  fee           Decimal @db.Decimal(12, 2)
+  labCost       Decimal @db.Decimal(12, 2)
+
+  budget Budget        @relation(fields: [budgetId], references: [id])
+  item   TreatmentItem @relation(fields: [itemId], references: [id])
+
+  @@unique([budgetId, itemId])
+}
+
+/// Aprobación total o parcial del paciente; se firma con el mismo mecanismo del consentimiento.
+model BudgetApproval {
+  id            String   @id @default(uuid())
+  budgetId      String
+  signingId     String   @unique
+  itemIds       String[]
+  approvedTotal Decimal  @db.Decimal(12, 2)
+  /// PDF del presupuesto firmado.
+  pdfKey        String?
+  pdfHash       String?
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  budget  Budget         @relation(fields: [budgetId], references: [id])
+  signing SigningRequest @relation(fields: [signingId], references: [id])
 }

@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AppointmentStatus, Role } from '@prisma/client';
+import { AppointmentStatus, Role, TreatmentItemStatus } from '@prisma/client';
 import type { AuthUser } from '../../common/types';
 import { RemindersService } from '../../notifications/reminders/reminders.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -61,15 +61,15 @@ export class AppointmentStatusService {
       );
     }
 
-    await this.prisma.db.$transaction([
-      this.prisma.db.appointment.update({
+    await this.prisma.db.$transaction(async (tx) => {
+      await tx.appointment.update({
         where: { id },
         data: {
           status: to,
           ...(to === AppointmentStatus.CANCELED && { cancelReason: dto.reason?.trim() }),
         },
-      }),
-      this.prisma.db.appointmentStatusLog.create({
+      });
+      await tx.appointmentStatusLog.create({
         data: {
           appointmentId: id,
           fromStatus: from,
@@ -77,8 +77,15 @@ export class AppointmentStatusService {
           userId: user.id,
           note: note ?? dto.reason?.trim() ?? null,
         },
-      }),
-    ]);
+      });
+      if (to === AppointmentStatus.CANCELED || to === AppointmentStatus.NO_SHOW) {
+        // Los ítems del plan vuelven a estar disponibles para agendarse de nuevo (RF-08)
+        await tx.treatmentItem.updateMany({
+          where: { appointmentId: id, status: TreatmentItemStatus.SCHEDULED },
+          data: { status: TreatmentItemStatus.APPROVED, appointmentId: null },
+        });
+      }
+    });
 
     if (CLOSING_STATUSES.includes(to)) await this.reminders.onAppointmentClosed(id);
     const view = await this.query.findOne(id, user);

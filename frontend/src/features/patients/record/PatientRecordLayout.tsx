@@ -25,19 +25,33 @@ export function PatientRecordLayout() {
   if (error || !patient) return <InlineError>{error ?? 'Paciente no encontrado'}</InlineError>;
 
   const base = `/patients/${patient.id}`;
+  const clinical = user?.role === 'ODONTOLOGO' || user?.role === 'ASISTENTE';
+  const tabs = clinical
+    ? [
+        { to: base, label: 'Resumen' },
+        { to: `${base}/attention`, label: 'Atención' },
+        { to: `${base}/odontogram`, label: 'Odontograma' },
+        { to: `${base}/perio`, label: 'Periodontograma' },
+        { to: `${base}/evolution`, label: 'Evolución' },
+        { to: `${base}/consents`, label: 'Consentimientos' },
+        { to: `${base}/prescriptions`, label: 'Recetas' },
+        { to: `${base}/attachments`, label: 'Adjuntos' },
+        { to: `${base}/plan`, label: 'Plan y presupuesto' },
+        { to: `${base}/timeline`, label: 'Línea de tiempo' },
+        { to: `${base}/anamnesis`, label: 'Anamnesis' },
+        { to: `${base}/appointments`, label: 'Citas' },
+      ]
+    : [
+        { to: base, label: 'Resumen' },
+        { to: `${base}/anamnesis`, label: 'Anamnesis' },
+        { to: `${base}/appointments`, label: 'Citas' },
+      ];
   const context: PatientRecordContext = { patient, reload, canEditAnamnesis: true };
 
   return (
     <>
       <PatientHeader patient={patient} canEdit={user?.role === 'RECEPCIONISTA'} />
-      <TabNav
-        label="Secciones del expediente"
-        items={[
-          { to: base, label: 'Resumen' },
-          { to: `${base}/anamnesis`, label: 'Anamnesis' },
-          { to: `${base}/appointments`, label: 'Citas' },
-        ]}
-      />
+      <TabNav label="Secciones del expediente" items={tabs} />
       <Outlet context={context} />
     </>
   );

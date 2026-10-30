@@ -9,6 +9,9 @@ const TABS: TabItem[] = [
   { to: '/admin/procedures', label: 'Procedimientos' },
   { to: '/admin/insurers', label: 'Seguros y convenios' },
   { to: '/admin/alerts', label: 'Alertas médicas' },
+  { to: '/admin/consents', label: 'Consentimientos' },
+  { to: '/admin/medications', label: 'Medicamentos' },
+  { to: '/admin/discounts', label: 'Descuentos' },
   { to: '/admin/settings', label: 'Parámetros' },
 ];
 
