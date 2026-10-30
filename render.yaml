@@ -1,7 +1,7 @@
 # Blueprint de Render para SIGO-Dental (https://render.com/docs/blueprint-spec).
 # Despliegue: Dashboard > New > Blueprint > repositorio. Guía paso a paso: documentacion/despliegue-render.md
 # Los planes "free" sirven para la demostración (se duermen tras 15 min sin tráfico y la BD gratuita caduca).
-# Para el uso real (RNF-02, 99,9 % de 07:00 a 21:00) suba cada plan a "starter" o superior.
+# Para el uso real (RNF-02, 99,9 % de 07:00 a 21:00) suba cada plan a "starter" o superior y añada el cron de respaldos.
 
 databases:
   - name: sigo-db
@@ -101,36 +101,6 @@ services:
           name: sigo-backend
           property: hostport
 
-  # Respaldos automáticos cifrados (RNF/§Fase 4): diario 02:00 hora de Bogotá (07:00 UTC).
-  - type: cron
-    name: sigo-backup
-    runtime: docker
-    plan: starter
-    region: oregon
-    schedule: "0 7 * * *"
-    dockerfilePath: ./backend/Dockerfile.backup
-    dockerContext: ./backend
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: sigo-db
-          property: connectionString
-      - key: ENCRYPTION_KEY
-        fromService:
-          type: web
-          name: sigo-backend
-          envVarKey: ENCRYPTION_KEY
-      - key: BACKUP_RETENTION_DAYS
-        value: "30"
-      - key: S3_ENDPOINT
-        sync: false
-      - key: S3_REGION
-        value: auto
-      - key: S3_ACCESS_KEY
-        sync: false
-      - key: S3_SECRET_KEY
-        sync: false
-      - key: S3_BUCKET
-        sync: false
-      - key: BACKUP_PREFIX
-        value: backups/
+  # Respaldos: el cron de Render no tiene plan gratuito, por eso NO se incluye en este plan 100 % gratis.
+  # Para respaldar a mano (desde su equipo, con el cliente de PostgreSQL) o activar un cron de pago, ver
+  # backend/Dockerfile.backup y backend/src/backup (comandos backup | list | restore).
