@@ -14,4 +14,9 @@ if [ "$BOOTSTRAP_PRODUCTION" = "true" ]; then
   node dist/seed-production.js
 fi
 
+# Datos de demostración (personal, pacientes, agenda, historias, cobros). Solo con DEMO_DATA=true; un fallo no impide arrancar.
+if [ "$DEMO_DATA" = "true" ]; then
+  node dist/seed-demo.js || echo "El seed de demostración falló; el sistema arranca igualmente"
+fi
+
 exec node dist/main.js

@@ -162,12 +162,39 @@ export async function seedClinicalCatalog(
 }
 
 /** Historia clínica de demostración de Carlos Mendoza (odontograma, periodontograma, nota, plan). */
-export async function seedClinicalDemo({ prisma: client, crypto }: SeedContext): Promise<void> {
+export interface ClinicalDemoOptions {
+  dentistEmail: string;
+  assistantEmail: string;
+  documentId: string;
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  planTitle: string;
+  vitals: { systolic: number; diastolic: number; pulse: number; weightKg: number };
+}
+
+const DEV_CLINICAL: ClinicalDemoOptions = {
+  dentistEmail: 'odontologo@sigo.test',
+  assistantEmail: 'asistente@sigo.test',
+  documentId: '0912345678',
+  subjective: 'Refiere dolor al masticar en el sector inferior derecho desde hace una semana.',
+  objective: 'Caries profunda en 46, sensibilidad a la percusión. Sin edema.',
+  assessment: 'Pulpitis irreversible sintomática del 46.',
+  plan: 'Endodoncia del 46 y posterior corona. Control de anticoagulación previo.',
+  planTitle: 'Rehabilitación sector inferior derecho',
+  vitals: { systolic: 135, diastolic: 85, pulse: 78, weightKg: 82.4 },
+};
+
+export async function seedClinicalDemo(
+  { prisma: client, crypto }: SeedContext,
+  options: ClinicalDemoOptions = DEV_CLINICAL,
+): Promise<void> {
   const prisma = client;
-  const dentist = await prisma.user.findUnique({ where: { email: 'odontologo@sigo.test' } });
-  const assistant = await prisma.user.findUnique({ where: { email: 'asistente@sigo.test' } });
+  const dentist = await prisma.user.findUnique({ where: { email: options.dentistEmail } });
+  const assistant = await prisma.user.findUnique({ where: { email: options.assistantEmail } });
   const patient = await prisma.patient.findFirst({
-    where: { documentHash: crypto.blindIndex('0912345678') },
+    where: { documentHash: crypto.blindIndex(options.documentId) },
   });
   if (!dentist || !assistant || !patient) return;
   if (await prisma.odontogram.findUnique({ where: { patientId: patient.id } })) return;
@@ -226,12 +253,12 @@ export async function seedClinicalDemo({ prisma: client, crypto }: SeedContext):
         data: {
           patientId: patient.id,
           recordedById: assistant.id,
-          systolic: 135,
-          diastolic: 85,
-          pulse: 78,
+          systolic: options.vitals.systolic,
+          diastolic: options.vitals.diastolic,
+          pulse: options.vitals.pulse,
           temperatureC: 36.6,
           oxygenSaturation: 97,
-          weightKg: 82.4,
+          weightKg: options.vitals.weightKg,
         },
       });
 
@@ -240,11 +267,10 @@ export async function seedClinicalDemo({ prisma: client, crypto }: SeedContext):
       const content = {
         patientId: patient.id,
         appointmentId: null,
-        subjective:
-          'Refiere dolor al masticar en el sector inferior derecho desde hace una semana.',
-        objective: 'Caries profunda en 46, sensibilidad a la percusión. Sin edema.',
-        assessment: 'Pulpitis irreversible sintomática del 46.',
-        plan: 'Endodoncia del 46 y posterior corona. Control de anticoagulación previo.',
+        subjective: options.subjective,
+        objective: options.objective,
+        assessment: options.assessment,
+        plan: options.plan,
       };
       await prisma.evolutionNote.create({
         data: {
@@ -273,7 +299,7 @@ export async function seedClinicalDemo({ prisma: client, crypto }: SeedContext):
       const plan = await prisma.treatmentPlan.create({
         data: {
           patientId: patient.id,
-          title: 'Rehabilitación sector inferior derecho',
+          title: options.planTitle,
           createdById: dentist.id,
           phases: {
             create: [

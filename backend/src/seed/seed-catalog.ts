@@ -25,7 +25,9 @@ export const PROCEDURES = [
 ];
 
 /** Horarios laborales por correo: [día de la semana, desde, hasta] en minutos (0 = domingo). */
-const SCHEDULES: Record<string, { kind: ProfessionalKind; specialty: string; slots: number[][] }> = {
+export type ScheduleMap = Record<string, { kind: ProfessionalKind; specialty: string; slots: number[][] }>;
+
+const SCHEDULES: ScheduleMap = {
   'odontologo@sigo.test': {
     kind: ProfessionalKind.GENERAL,
     specialty: 'Odontología general',
@@ -45,7 +47,7 @@ export async function seedProcedures({ prisma }: SeedContext): Promise<void> {
   }
 }
 
-export async function seedCatalog({ prisma }: SeedContext): Promise<void> {
+export async function seedCatalog({ prisma }: SeedContext, schedules: ScheduleMap = SCHEDULES): Promise<void> {
   for (const office of OFFICES) {
     const saved = await prisma.office.upsert({
       where: { name: office.name },
@@ -67,7 +69,7 @@ export async function seedCatalog({ prisma }: SeedContext): Promise<void> {
     await prisma.procedure.upsert({ where: { code: procedure.code }, update: {}, create: procedure });
   }
 
-  for (const [email, config] of Object.entries(SCHEDULES)) {
+  for (const [email, config] of Object.entries(schedules)) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) continue;
     const professional = await prisma.professional.upsert({

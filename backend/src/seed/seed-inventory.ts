@@ -26,9 +26,23 @@ const RECIPES: Record<string, Array<[string, number]>> = {
 const daysFromNow = (days: number) => new Date(Date.now() + days * 86_400_000);
 
 /** Insumos, recetas de consumo, stock inicial por consultorio y profesional, y reglas de comisión de demostración. */
-export async function seedInventory({ prisma }: SeedContext): Promise<void> {
+export interface InventoryOptions {
+  adminEmail: string;
+  /** Fracción del stock del consultorio que lleva cada profesional (por correo). */
+  stockFactor: (email: string) => number;
+  /** Porcentaje de comisión general por correo del profesional. */
+  commissionPercent: (email: string) => number;
+}
+
+const DEV_OPTIONS: InventoryOptions = {
+  adminEmail: 'admin@sigo.test',
+  stockFactor: (email) => (email === 'odontologo@sigo.test' ? 0.4 : 0.15),
+  commissionPercent: (email) => (email === 'odontologo@sigo.test' ? 40 : 45),
+};
+
+export async function seedInventory({ prisma }: SeedContext, options: InventoryOptions = DEV_OPTIONS): Promise<void> {
   if ((await prisma.inventoryItem.count()) > 0) return;
-  const admin = await prisma.user.findUnique({ where: { email: 'admin@sigo.test' } });
+  const admin = await prisma.user.findUnique({ where: { email: options.adminEmail } });
   if (!admin) return;
 
   for (const item of ITEMS) await prisma.inventoryItem.create({ data: item });
@@ -50,7 +64,7 @@ export async function seedInventory({ prisma }: SeedContext): Promise<void> {
     locations.push({ ownerKey: professional.user.email, location: await prisma.stockLocation.create({ data: { professionalId: professional.id, name: `Profesional: ${professional.user.fullName}` } }) });
   }
   for (const { ownerKey, location } of locations) {
-    const factor = ownerKey === 'office' ? 1 : ownerKey === 'odontologo@sigo.test' ? 0.4 : 0.15;
+    const factor = ownerKey === 'office' ? 1 : options.stockFactor(ownerKey);
     let index = 0;
     for (const item of items.values()) {
       index++;
@@ -76,7 +90,7 @@ export async function seedInventory({ prisma }: SeedContext): Promise<void> {
   const consult = procedures.get('CONS-01');
   for (const professional of professionals) {
     const base = { professionalId: professional.id, validFrom: today };
-    await prisma.commissionRule.create({ data: { ...base, mode: CommissionMode.PERCENT, value: professional.user.email === 'odontologo@sigo.test' ? 40 : 45 } });
+    await prisma.commissionRule.create({ data: { ...base, mode: CommissionMode.PERCENT, value: options.commissionPercent(professional.user.email) } });
     if (crown) await prisma.commissionRule.create({ data: { ...base, procedureId: crown.id, mode: CommissionMode.PERCENT_NET_OF_COSTS, value: 50, priority: 1 } });
     if (consult) await prisma.commissionRule.create({ data: { ...base, procedureId: consult.id, mode: CommissionMode.FIXED_AMOUNT, value: 8, priority: 1 } });
   }
