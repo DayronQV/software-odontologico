@@ -1,8 +1,10 @@
 import {
   useId,
+  useState,
   type ComponentPropsWithRef,
   type ReactNode,
 } from 'react';
+import { Icon } from './Icon';
 
 interface ShellProps {
   label: string;
@@ -51,15 +53,36 @@ export function Field({
 }: BaseProps & ComponentPropsWithRef<'input'>) {
   const auto = useId();
   const inputId = id ?? auto;
+  const [visible, setVisible] = useState(false);
+  const isPassword = rest.type === 'password';
+  const input = (
+    <input
+      id={inputId}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={error ? `${inputId}-error` : undefined}
+      className={controlClass(error, `min-h-11 ${isPassword ? 'pr-12' : ''} ${className}`)}
+      {...rest}
+      type={isPassword && visible ? 'text' : rest.type}
+    />
+  );
   return (
     <FieldShell label={label} error={error} hint={hint} inputId={inputId}>
-      <input
-        id={inputId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${inputId}-error` : undefined}
-        className={controlClass(error, `min-h-11 ${className}`)}
-        {...rest}
-      />
+      {isPassword ? (
+        <div className="relative">
+          {input}
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            aria-pressed={visible}
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+          >
+            <Icon name={visible ? 'eyeOff' : 'eye'} />
+          </button>
+        </div>
+      ) : (
+        input
+      )}
     </FieldShell>
   );
 }

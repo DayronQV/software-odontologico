@@ -128,3 +128,20 @@ describe('Toast', () => {
     vi.useRealTimers();
   });
 });
+
+describe('Field de contraseña', () => {
+  it('muestra u oculta la contraseña con el botón del ojo', async () => {
+    render(<Field label="Contraseña" type="password" defaultValue="Secreta-2026!" />);
+    const input = screen.getByLabelText('Contraseña');
+    expect(input).toHaveAttribute('type', 'password');
+    await userEvent.click(screen.getByRole('button', { name: 'Mostrar contraseña' }));
+    expect(input).toHaveAttribute('type', 'text');
+    await userEvent.click(screen.getByRole('button', { name: 'Ocultar contraseña' }));
+    expect(input).toHaveAttribute('type', 'password');
+  });
+
+  it('los campos que no son de contraseña no llevan el botón', () => {
+    render(<Field label="Correo" type="email" />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
