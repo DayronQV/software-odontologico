@@ -97,7 +97,8 @@ interface RequestOptions {
   auth?: boolean;
 }
 
-export async function api<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
+/** Envía la petición con el JWT; si el token expiró lo renueva una vez y reintenta. */
+async function request(path: string, options: RequestOptions): Promise<Response> {
   const { method = 'GET', body, auth = true } = options;
 
   const send = () =>
@@ -128,8 +129,23 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
     }
   }
 
+  return res;
+}
+
+export async function api<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
+  const res = await request(path, options);
   if (res.status === 204) return undefined as T;
   const data: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, extractMessage(data) ?? res.statusText);
   return data as T;
+}
+
+/** Descarga un archivo (p. ej. el PDF de un comprobante) con la sesión actual. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await request(path, {});
+  if (!res.ok) {
+    const data: unknown = await res.json().catch(() => null);
+    throw new ApiError(res.status, extractMessage(data) ?? res.statusText);
+  }
+  return res.blob();
 }

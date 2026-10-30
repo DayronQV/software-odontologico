@@ -1,11 +1,25 @@
 @import 'tailwindcss';
 
+/*
+ * Identidad visual: clínica, serena y poco saturada. Un único color de marca (verde azulado suave),
+ * neutros fríos y tonos pastel solo para estados.
+ */
 @theme {
-  --color-brand-50: #f0fdfa;
-  --color-brand-100: #ccfbf1;
-  --color-brand-600: #0d9488;
-  --color-brand-700: #0f766e;
-  --color-brand-800: #115e59;
+  --font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  --color-brand-50: #f1f9f8;
+  --color-brand-100: #d8eeec;
+  --color-brand-200: #b3dcd8;
+  --color-brand-300: #84c3be;
+  --color-brand-400: #52a69f;
+  --color-brand-500: #348a85;
+  --color-brand-600: #2a716e;
+  --color-brand-700: #245c5a;
+  --color-brand-800: #214a49;
+  --color-brand-900: #1d3d3c;
+
+  --color-canvas: #f6f8f9;
+  --color-line: #e3e8eb;
 }
 
 html {
@@ -13,11 +27,67 @@ html {
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  background-color: var(--color-canvas);
+  color: var(--color-slate-700);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--color-slate-900);
 }
 
 /* Foco visible y consistente (teclado y táctil) */
 :focus-visible {
-  outline: 3px solid var(--color-brand-600);
+  outline: 3px solid var(--color-brand-300);
   outline-offset: 2px;
+}
+
+/* Calendario (FullCalendar) en la misma línea visual */
+.fc {
+  --fc-border-color: var(--color-line);
+  --fc-today-bg-color: var(--color-brand-50);
+  --fc-now-indicator-color: var(--color-brand-500);
+  --fc-page-bg-color: #ffffff;
+  --fc-neutral-bg-color: var(--color-canvas);
+  --fc-event-border-color: transparent;
+  font-size: 0.875rem;
+}
+.fc .fc-toolbar-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-slate-900);
+  text-transform: capitalize;
+}
+.fc .fc-button {
+  min-height: 2.5rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--color-line);
+  background: #fff;
+  color: var(--color-slate-700);
+  font-weight: 500;
+  box-shadow: none;
+  text-transform: capitalize;
+}
+.fc .fc-button:hover {
+  background: var(--color-slate-50);
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background: var(--color-brand-600);
+  border-color: var(--color-brand-600);
+  color: #fff;
+}
+.fc .fc-col-header-cell-cushion,
+.fc .fc-timegrid-slot-label-cushion {
+  color: var(--color-slate-500);
+  font-weight: 500;
+  text-transform: capitalize;
+}
+.fc .fc-event {
+  border-radius: 0.5rem;
+  padding: 1px 2px;
+  cursor: pointer;
 }

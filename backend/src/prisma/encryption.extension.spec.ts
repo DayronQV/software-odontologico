@@ -28,19 +28,37 @@ describe('extensión de cifrado de Prisma', () => {
     expect(result.documentId).toBe('0102030405');
   });
 
+  it('cifra cada elemento de las listas (alergias, enfermedades…)', async () => {
+    let seen: any;
+    const result = await hook({
+      model: 'MedicalHistory',
+      operation: 'create',
+      args: { data: { drugAllergies: ['penicilina', 'látex'], surgicalHistory: 'apendicectomía' } },
+      query: async (args: any) => {
+        seen = structuredClone(args);
+        return { ...args.data };
+      },
+    });
+    expect(seen.data.drugAllergies.every((v: string) => v.startsWith('enc:v1:'))).toBe(true);
+    expect(JSON.stringify(seen)).not.toContain('penicilina');
+    expect(result.drugAllergies).toEqual(['penicilina', 'látex']);
+    expect(result.surgicalHistory).toBe('apendicectomía');
+  });
+
   it('cifra tanto create como update en un upsert, y el formato { set }', async () => {
     let seen: any;
     await hook({
-      model: 'MfaSecret',
+      model: 'MedicalHistory',
       operation: 'upsert',
-      args: { create: { secret: 'AAAA' }, update: { secret: { set: 'BBBB' } } },
+      args: { create: { drugAllergies: ['a'] }, update: { drugAllergies: { set: ['b'] }, surgicalHistory: 'x' } },
       query: async (args: any) => {
         seen = structuredClone(args);
         return null;
       },
     });
-    expect(seen.create.secret.startsWith('enc:v1:')).toBe(true);
-    expect(seen.update.secret.set.startsWith('enc:v1:')).toBe(true);
+    expect(seen.create.drugAllergies[0].startsWith('enc:v1:')).toBe(true);
+    expect(seen.update.drugAllergies.set[0].startsWith('enc:v1:')).toBe(true);
+    expect(seen.update.surgicalHistory.startsWith('enc:v1:')).toBe(true);
   });
 
   it('descifra listas de resultados y no cifra dos veces', async () => {
@@ -65,6 +83,36 @@ describe('extensión de cifrado de Prisma', () => {
       },
     });
     expect(seen.data.documentId).toBe(enc);
+  });
+
+  it('descifra relaciones anidadas (include) de cualquier modelo', async () => {
+    const result = await hook({
+      model: 'Appointment',
+      operation: 'findUnique',
+      args: {},
+      query: async () => ({
+        id: 'a1',
+        patient: {
+          documentId: crypto.encrypt('0102'),
+          guardian: { documentId: crypto.encrypt('0999') },
+          medicalHistory: { drugAllergies: [crypto.encrypt('penicilina')] },
+        },
+      }),
+    });
+    expect(result.patient.documentId).toBe('0102');
+    expect(result.patient.guardian.documentId).toBe('0999');
+    expect(result.patient.medicalHistory.drugAllergies).toEqual(['penicilina']);
+  });
+
+  it('un valor corrupto no rompe la lectura completa', async () => {
+    const result = await hook({
+      model: 'User',
+      operation: 'findFirst',
+      args: {},
+      query: async () => ({ documentId: 'enc:v1:AAAA', email: 'x@y.z' }),
+    });
+    expect(result.email).toBe('x@y.z');
+    expect(result.documentId).toBe('enc:v1:AAAA');
   });
 
   it('procesa createMany con arreglos y deja intactos los modelos sin campos sensibles', async () => {

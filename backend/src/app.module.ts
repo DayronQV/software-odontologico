@@ -4,6 +4,11 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { CatalogModule } from './catalog/catalog.module';
+import { PatientsModule } from './patients/patients.module';
+import { AgendaModule } from './agenda/agenda.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { BillingModule } from './billing/billing.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { DEFAULT_THROTTLE } from './common/throttle';
@@ -27,6 +32,11 @@ import { UsersModule } from './users/users.module';
     AuditModule,
     AuthModule,
     UsersModule,
+    CatalogModule,
+    PatientsModule,
+    AgendaModule,
+    NotificationsModule,
+    BillingModule,
     FilesModule,
     QueueModule,
     RealtimeModule,

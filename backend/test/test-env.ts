@@ -15,6 +15,8 @@ export const TEST_ENV: Record<string, string> = {
   TRUST_PROXY: '0',
   THROTTLE_AUTH_LIMIT: '1000',
   THROTTLE_AUTH_TTL_SECONDS: '60',
+  SMTP_HOST: 'localhost',
+  SMTP_PORT: '1025',
   S3_ENDPOINT: 'http://localhost:9000',
   S3_PUBLIC_ENDPOINT: 'http://localhost:9000',
   S3_ACCESS_KEY: 'sigo_minio',

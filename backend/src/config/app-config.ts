@@ -26,6 +26,11 @@ const envSchema = z.object({
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   MFA_ISSUER: z.string().default('SIGO-Dental'),
 
+  // Correo transaccional (RF-11). En desarrollo apunta a Mailpit.
+  SMTP_HOST: z.string().default('localhost'),
+  SMTP_PORT: z.coerce.number().int().positive().default(1025),
+  MAIL_FROM: z.string().default('SIGO-Dental <no-reply@sigo-dental.test>'),
+
   S3_ENDPOINT: z.string().default('http://localhost:9000'),
   S3_PUBLIC_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('us-east-1'),

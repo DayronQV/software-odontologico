@@ -58,9 +58,37 @@ describe('Infraestructura: health, Swagger, archivos, colas y seed', () => {
           '/api/files/upload-url',
           '/api/files/download-url',
           '/api/health',
+          '/api/catalog/offices',
+          '/api/catalog/professionals/{id}/schedule',
+          '/api/catalog/procedures',
+          '/api/catalog/settings',
+          '/api/patients',
+          '/api/patients/{id}',
+          '/api/patients/{patientId}/medical-history',
+          '/api/agenda/appointments',
+          '/api/agenda/appointments/waiting-room',
+          '/api/agenda/appointments/{id}/status',
+          '/api/agenda/appointments/{id}/reschedule',
+          '/api/notifications/appointments/{appointmentId}',
+          '/api/billing/invoices',
+          '/api/billing/invoices/{id}/pdf',
+          '/api/billing/invoices/{id}/void',
+          '/api/billing/cash-sessions/open',
+          '/api/billing/cash-sessions/{id}/close',
         ]),
       );
       expect(res.body.components.securitySchemes.bearer).toBeDefined();
+    });
+
+    it('describe los objetos anidados (tutor, contacto de emergencia, pagos, líneas…)', async () => {
+      const { body } = await http(app).get('/api/docs-json').expect(200);
+      const schemas = body.components.schemas;
+      expect(schemas.CreatePatientDto.properties.emergencyContact.$ref).toContain('EmergencyContactDto');
+      expect(schemas.CreatePatientDto.properties.guardian.$ref).toContain('GuardianDto');
+      expect(schemas.CreatePatientDto.required).toContain('emergencyContact');
+      expect(schemas.IssueInvoiceDto.properties.payments.items.$ref).toContain('PaymentInputDto');
+      expect(schemas.IssueInvoiceDto.properties.lines.items.$ref).toContain('InvoiceLineInputDto');
+      expect(schemas.CreateProfessionalDto.properties.schedule.items.$ref).toContain('ScheduleSlotDto');
     });
 
     it('sirve la interfaz de Swagger en /api/docs', async () => {
@@ -125,10 +153,14 @@ describe('Infraestructura: health, Swagger, archivos, colas y seed', () => {
   });
 
   describe('cola de notificaciones (BullMQ sobre Redis)', () => {
-    it('la cola está registrada y conectada (sin jobs en Fase 0)', async () => {
+    it('la cola está registrada y conectada a Redis', async () => {
       const queue = app.get<Queue>(getQueueToken(NOTIFICATIONS_QUEUE));
       const counts = await queue.getJobCounts('waiting', 'active', 'delayed');
-      expect(counts).toMatchObject({ waiting: 0, active: 0, delayed: 0 });
+      expect(counts).toMatchObject({
+        waiting: expect.any(Number),
+        active: expect.any(Number),
+        delayed: expect.any(Number), // recordatorios programados por otras pruebas
+      });
     });
   });
 
@@ -139,9 +171,10 @@ describe('Infraestructura: health, Swagger, archivos, colas y seed', () => {
         where: { email: { endsWith: '@sigo.test' } },
         select: { email: true, role: true },
       });
-      expect(seeded.map((u) => u.role).sort()).toEqual(
+      expect([...new Set(seeded.map((u) => u.role))].sort()).toEqual(
         ['ADMIN_TI', 'ASISTENTE', 'AUDITOR', 'ODONTOLOGO', 'RECEPCIONISTA'].sort(),
       );
+      expect(seeded).toHaveLength(6); // incluye un segundo odontólogo (especialista)
       const res = await login(app, 'odontologo@sigo.test', process.env.SEED_PASSWORD as string);
       expect(res.status).toBe(200);
       expect(res.body.user.role).toBe('ODONTOLOGO');

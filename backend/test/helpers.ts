@@ -1,5 +1,5 @@
 import { INestApplication, Type } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 import { Role } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import * as OTPAuth from 'otpauth';
@@ -11,11 +11,13 @@ import { PrismaService } from '../src/prisma/prisma.service';
 
 export const STRONG_PASSWORD = 'Contrasena-Segura-2026!';
 
-export async function createTestApp(extraControllers: Type<unknown>[] = []): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
-    controllers: extraControllers,
-  }).compile();
+export async function createTestApp(
+  extraControllers: Type<unknown>[] = [],
+  customize?: (builder: TestingModuleBuilder) => TestingModuleBuilder,
+): Promise<INestApplication> {
+  let builder = Test.createTestingModule({ imports: [AppModule], controllers: extraControllers });
+  if (customize) builder = customize(builder);
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
   await app.init();
@@ -63,7 +65,14 @@ export interface TestSession {
 
 /** Crea un usuario, inicia sesión y completa el enrolamiento MFA (sesión con MFA verificado). */
 export async function createSession(app: INestApplication, role: Role): Promise<TestSession> {
-  const user = await createUser(app, role);
+  return enrollSession(app, await createUser(app, role));
+}
+
+/** Inicia sesión con un usuario ya existente y completa el enrolamiento MFA. */
+export async function enrollSession(
+  app: INestApplication,
+  user: { id: string; email: string; password: string },
+): Promise<TestSession> {
   const partial = (await login(app, user.email, user.password)).body;
   const setup = await http(app)
     .post('/api/auth/mfa/setup')

@@ -61,12 +61,22 @@ Implícitos a no olvidar: recetas odontológicas, catálogo médico (procedimien
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Fundación: Docker, NestJS, React, JWT, RBAC, MFA, sesión 15 min, auditoría inmutable, AES-256, TLS 1.3, files, colas, WSS, seed, tests | ✅ **Completada** |
-| 1 | Pacientes (RF-01/02), agenda (RF-09/10, RN-03), recordatorios (RF-11), POS/facturación simulada (RF-12), caja ciega (RN-02), catálogo médico, usuarios/catálogos Admin | ⏳ Pendiente |
+| 1 | Pacientes (RF-01/02), agenda (RF-09/10, RN-03), recordatorios (RF-11), POS/facturación simulada (RF-12), caja ciega (RN-02), catálogo médico, usuarios/catálogos Admin | ✅ **Completada** |
 | 2 | Odontograma, periodontograma, SOEP+firma, consentimientos, recetas, presupuestos, adjuntos (RF-03…08, RN-01) | ⏳ Pendiente |
 | 3 | Comisiones (RF-13), descargo de insumos (RF-14), inventario, reportes BI, rol Auditor | ⏳ Pendiente |
 | 4 | UAT, SAST/DAST, carga 150 usuarios, backups, producción, OpenAPI final | ⏳ Pendiente |
 
 Resultados Fase 0: backend 100 pruebas (cobertura ≈ 98 % líneas), frontend 60 pruebas (cobertura ≈ 54 %; el SRS exige 80 % solo en endpoints críticos del backend), lint y tipos limpios. Verificado en Docker: TLS 1.2 rechazado/TLS 1.3 ok, MFA→RBAC→WSS por el gateway, campos cifrados en Postgres, triggers de auditoría, y UI responsive medida en 1920×1080, 1366×768, iPad 10.5" (horizontal y vertical).
+
+Resultados Fase 1: backend 34 suites / 300 pruebas (≈ 95 % líneas), frontend 17 archivos / 120 pruebas, tipos y lint limpios; E2E vivo por Docker (33/33 comprobaciones).
+
+### Arquitectura Fase 1
+- Backend (`src/`): `catalog` (consultorios, sillones, profesionales+horarios, procedimientos, aseguradoras, parámetros, reglas de alerta) · `patients` (ficha, tutor, emergencia, seguro, anamnesis, alertas críticas) · `agenda` (citas, máquina de estados RF-10, disponibilidad) · `notifications` (recordatorios 48/24 h con BullMQ, plantillas, historial) · `billing` (POS en centavos, comprobantes, notas de crédito, caja ciega RN-02) · `integrations` (`FiscalInvoiceProvider`, `PaymentGateway`, `MessagingChannel`: WhatsApp/SMS simulados, Email real a Mailpit) · `common` (paginación, dinero, hora local `America/Bogota`, errores Prisma).
+- RN-03 se garantiza con restricciones de exclusión de PostgreSQL (`btree_gist`, `tstzrange`) para sillón, profesional y paciente, además de mensajes claros en `AvailabilityService`.
+- Búsqueda exacta por documento cifrado: índice ciego HMAC (`CryptoService.blindIndex`, `Patient.documentHash`).
+- Frontend: `components/layout`, `components/ui`, `features/{admin,patients,agenda,billing,catalog,...}`; Agenda (FullCalendar) con carga diferida; hooks `useResource`, `usePagedList`, `useDebouncedValue`.
+- Seed: 6 usuarios (incl. `especialista@sigo.test`), 13 procedimientos, 3 pacientes demo.
+- Trampas: (1) el plugin CLI de Swagger genera `require("C:/…")` en Windows para propiedades tipadas con clases → usar `@ApiProperty({ type: () => X })`; (2) en Vitest, `beforeEach(() => mock.mockReset())` devuelve el mock y se ejecuta como limpieza → usar llaves; (3) `prisma migrate reset` está bloqueado → las e2e hacen `DROP SCHEMA` en `globalSetup`.
 
 ## Convenciones
 - TypeScript estricto; ESLint + Prettier (comillas simples, 100 cols). Commits en español, estilo `feat(fase-N): …`, `fix: …`.

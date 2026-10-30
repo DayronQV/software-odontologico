@@ -1,21 +1,30 @@
 import type { ButtonHTMLAttributes } from 'react';
 
-type Variant = 'primary' | 'secondary' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Size = 'md' | 'sm';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
+  size?: Size;
   loading?: boolean;
 }
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand-700 text-white hover:bg-brand-800',
-  secondary: 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-100',
-  danger: 'bg-red-700 text-white hover:bg-red-800',
+  primary: 'bg-brand-600 text-white shadow-sm hover:bg-brand-700',
+  secondary: 'border border-line bg-white text-slate-700 shadow-sm hover:bg-slate-50',
+  ghost: 'text-slate-600 hover:bg-slate-100',
+  danger: 'bg-rose-600 text-white shadow-sm hover:bg-rose-700',
 };
 
-/** Botón con objetivo táctil de 44 px (uso en tablet junto al sillón). */
+// 44 px de alto: objetivo táctil cómodo para tablets junto al sillón. `sm` solo en filas de tablas.
+const SIZES: Record<Size, string> = {
+  md: 'min-h-11 px-4 text-sm',
+  sm: 'min-h-10 px-3 text-sm',
+};
+
 export function Button({
   variant = 'primary',
+  size = 'md',
   loading = false,
   disabled,
   className = '',
@@ -28,7 +37,7 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex min-w-11 items-center justify-center gap-2 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-55 ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {loading ? 'Procesando…' : children}

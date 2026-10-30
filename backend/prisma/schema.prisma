@@ -1,4 +1,6 @@
-// SIGO-Dental — esquema de datos (Fase 0: usuarios, MFA, sesiones, auditoría)
+// SIGO-Dental — esquema de datos
+// Fase 0: usuarios, MFA, sesiones, auditoría
+// Fase 1: catálogo, pacientes, agenda, notificaciones, facturación y caja
 
 generator client {
   provider      = "prisma-client-js"
@@ -10,6 +12,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// =====================================================================================
+// Enumeraciones
+// =====================================================================================
+
 // Perfiles del SRS §3
 enum Role {
   ADMIN_TI
@@ -18,6 +24,101 @@ enum Role {
   ASISTENTE
   AUDITOR
 }
+
+enum Sex {
+  FEMALE
+  MALE
+  OTHER
+}
+
+enum ContactChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+}
+
+enum ProfessionalKind {
+  GENERAL
+  SPECIALIST
+}
+
+enum AlertKind {
+  DRUG_ALLERGY
+  SYSTEMIC_DISEASE
+  COAGULOPATHY
+  ANTICOAGULANT
+}
+
+enum AlertSeverity {
+  CRITICAL
+  WARNING
+}
+
+// RF-10
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  WAITING_ROOM
+  IN_ATTENTION
+  ATTENDED
+  CANCELED
+  NO_SHOW
+}
+
+enum AppointmentOrigin {
+  MANUAL
+  TREATMENT_BUDGET
+}
+
+enum NotificationKind {
+  CONFIRMATION
+  RESCHEDULED
+  REMINDER
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+  CANCELED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD_CREDIT
+  CARD_DEBIT
+  TRANSFER
+  INSURANCE
+}
+
+enum InvoiceStatus {
+  ISSUED
+  VOIDED
+}
+
+enum FiscalStatus {
+  AUTHORIZED
+  PENDING
+}
+
+enum RetentionType {
+  IVA
+  RENTA
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  REFUND
+}
+
+// =====================================================================================
+// Fase 0 — seguridad
+// =====================================================================================
 
 model User {
   id           String   @id @default(uuid())
@@ -31,8 +132,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  mfa           MfaSecret?
-  refreshTokens RefreshToken[]
+  mfa                 MfaSecret?
+  refreshTokens       RefreshToken[]
+  professional        Professional?
+  createdAppointments Appointment[]          @relation("AppointmentCreator")
+  statusChanges       AppointmentStatusLog[]
+  cashSessions        CashSession[]
+  issuedInvoices      Invoice[]              @relation("InvoiceIssuer")
 }
 
 model MfaSecret {
@@ -91,4 +197,444 @@ model AuditLog {
   @@index([userId])
   @@index([entity, entityId])
   @@index([action])
+}
+
+// =====================================================================================
+// Fase 1 — catálogo y administración
+// =====================================================================================
+
+model Office {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  address   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chairs Chair[]
+}
+
+model Chair {
+  id        String   @id @default(uuid())
+  officeId  String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  office       Office        @relation(fields: [officeId], references: [id])
+  appointments Appointment[]
+
+  @@unique([officeId, name])
+}
+
+model Professional {
+  id            String           @id @default(uuid())
+  userId        String           @unique
+  kind          ProfessionalKind @default(GENERAL)
+  specialty     String?
+  licenseNumber String?
+  active        Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user         User                   @relation(fields: [userId], references: [id])
+  schedules    ProfessionalSchedule[]
+  appointments Appointment[]
+}
+
+/// Horario laboral semanal. weekday: 0 = domingo … 6 = sábado. Minutos desde las 00:00 (hora local de la clínica).
+model ProfessionalSchedule {
+  id             String @id @default(uuid())
+  professionalId String
+  weekday        Int
+  startMinute    Int
+  endMinute      Int
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@index([professionalId])
+}
+
+model Procedure {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  name            String
+  category        String
+  durationMinutes Int
+  basePrice       Decimal  @db.Decimal(12, 2)
+  labCost         Decimal  @default(0) @db.Decimal(12, 2)
+  requiresConsent Boolean  @default(false)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  appointments AppointmentProcedure[]
+  invoiceLines InvoiceLine[]
+
+  @@index([name])
+  @@index([category])
+}
+
+model Insurer {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  patientInsurances PatientInsurance[]
+}
+
+/// Parámetros globales (una sola fila, id = 1).
+model ClinicSettings {
+  id                 Int      @id @default(1)
+  clinicName         String
+  timezone           String
+  currency           String
+  taxRatePercent     Decimal  @db.Decimal(5, 2)
+  /// Apertura y cierre de la clínica, en minutos desde las 00:00 (07:00 = 420, 21:00 = 1260).
+  opensAtMinute      Int
+  closesAtMinute     Int
+  /// Antelación (horas) de los recordatorios automáticos. Por defecto 48 y 24 (RF-11).
+  reminderHours      Int[]
+  /// Descuento máximo que puede aplicar recepción sin autorización del administrador.
+  maxDiscountPercent Decimal  @db.Decimal(5, 2)
+  updatedAt          DateTime @updatedAt
+}
+
+/// Reglas configurables que convierten datos de la anamnesis en alertas médicas (RF-02).
+model AlertRule {
+  id        String        @id @default(uuid())
+  label     String
+  kind      AlertKind
+  /// Texto a buscar (sin distinguir mayúsculas ni acentos). Nulo = cualquier entrada del campo.
+  keyword   String?
+  severity  AlertSeverity @default(CRITICAL)
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+}
+
+// =====================================================================================
+// Fase 1 — pacientes (RF-01, RF-02)
+// =====================================================================================
+
+model Patient {
+  id               String         @id @default(uuid())
+  firstName        String
+  lastName         String
+  /// Cifrado (AES-256-GCM). La búsqueda exacta usa `documentHash` (índice ciego).
+  documentId       String?
+  documentHash     String?        @unique
+  birthDate        DateTime       @db.Date
+  sex              Sex
+  address          String?
+  phone            String?
+  email            String?
+  occupation       String?
+  preferredChannel ContactChannel @default(WHATSAPP)
+  contactConsent   Boolean        @default(false)
+  active           Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  guardian         Guardian?
+  emergencyContact EmergencyContact?
+  insurance        PatientInsurance?
+  medicalHistory   MedicalHistory?
+  appointments     Appointment[]
+  invoices         Invoice[]
+
+  @@index([lastName, firstName])
+}
+
+/// Tutor legal (obligatorio si el paciente es menor de edad).
+model Guardian {
+  id           String  @id @default(uuid())
+  patientId    String  @unique
+  fullName     String
+  relationship String
+  documentId   String?
+  phone        String
+  email        String?
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model EmergencyContact {
+  id           String @id @default(uuid())
+  patientId    String @unique
+  fullName     String
+  relationship String
+  phone        String
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model PatientInsurance {
+  id              String    @id @default(uuid())
+  patientId       String    @unique
+  insurerId       String
+  policyNumber    String
+  validFrom       DateTime? @db.Date
+  validUntil      DateTime? @db.Date
+  coveragePercent Decimal?  @db.Decimal(5, 2)
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  insurer Insurer @relation(fields: [insurerId], references: [id])
+}
+
+/// Anamnesis (RF-02). Los campos clínicos se guardan CIFRADOS (cada elemento de las listas).
+model MedicalHistory {
+  id                String   @id @default(uuid())
+  patientId         String   @unique
+  systemicDiseases  String[]
+  drugAllergies     String[]
+  coagulopathies    String[]
+  surgicalHistory   String?
+  currentMedication String?
+  anticoagulated    Boolean  @default(false)
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+// =====================================================================================
+// Fase 1 — agenda (RF-09, RF-10, RN-03)
+// =====================================================================================
+
+/// RN-03: una restricción de exclusión en PostgreSQL impide dos citas activas simultáneas en el
+/// mismo sillón (y para el mismo profesional o paciente). Ver la migración de la Fase 1.
+model Appointment {
+  id             String            @id @default(uuid())
+  patientId      String
+  professionalId String
+  chairId        String
+  startAt        DateTime          @db.Timestamptz(3)
+  endAt          DateTime          @db.Timestamptz(3)
+  status         AppointmentStatus @default(SCHEDULED)
+  notes          String?
+  cancelReason   String?
+  origin         AppointmentOrigin @default(MANUAL)
+  createdById    String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  patient       Patient                @relation(fields: [patientId], references: [id])
+  professional  Professional           @relation(fields: [professionalId], references: [id])
+  chair         Chair                  @relation(fields: [chairId], references: [id])
+  createdBy     User                   @relation("AppointmentCreator", fields: [createdById], references: [id])
+  procedures    AppointmentProcedure[]
+  statusLogs    AppointmentStatusLog[]
+  notifications NotificationLog[]
+  invoices      Invoice[]
+
+  @@index([startAt])
+  @@index([chairId, startAt])
+  @@index([professionalId, startAt])
+  @@index([patientId])
+  @@index([status])
+}
+
+model AppointmentProcedure {
+  appointmentId String
+  procedureId   String
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  procedure   Procedure   @relation(fields: [procedureId], references: [id])
+
+  @@id([appointmentId, procedureId])
+}
+
+/// Bitácora de estados: quién y cuándo (RF-10).
+model AppointmentStatusLog {
+  id            String             @id @default(uuid())
+  appointmentId String
+  fromStatus    AppointmentStatus?
+  toStatus      AppointmentStatus
+  userId        String
+  note          String?
+  createdAt     DateTime           @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@index([appointmentId, createdAt])
+}
+
+// =====================================================================================
+// Fase 1 — notificaciones (RF-11)
+// =====================================================================================
+
+model NotificationLog {
+  id                String             @id @default(uuid())
+  appointmentId     String
+  channel           ContactChannel
+  kind              NotificationKind
+  /// Antelación en horas (solo recordatorios).
+  leadHours         Int?
+  status            NotificationStatus @default(PENDING)
+  scheduledFor      DateTime           @db.Timestamptz(3)
+  sentAt            DateTime?          @db.Timestamptz(3)
+  attempts          Int                @default(0)
+  error             String?
+  recipient         String?
+  subject           String?
+  body              String?
+  providerMessageId String?
+  createdAt         DateTime           @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  @@index([appointmentId, scheduledFor])
+  @@index([status])
+}
+
+// =====================================================================================
+// Fase 1 — facturación y caja (RF-12, RN-02)
+// =====================================================================================
+
+model CashSession {
+  id           String            @id @default(uuid())
+  openedById   String
+  openedAt     DateTime          @default(now())
+  openingFloat Decimal           @db.Decimal(12, 2)
+  status       CashSessionStatus @default(OPEN)
+  closedAt     DateTime?
+  /// Efectivo contado físicamente por quien cierra (se ingresa ANTES de ver el total del sistema).
+  countedCash  Decimal?          @db.Decimal(12, 2)
+  expectedCash Decimal?          @db.Decimal(12, 2)
+  difference   Decimal?          @db.Decimal(12, 2)
+  closeNotes   String?
+
+  openedBy  User           @relation(fields: [openedById], references: [id])
+  invoices  Invoice[]
+  payments  Payment[]
+  movements CashMovement[]
+
+  @@index([openedById, status])
+}
+
+model CashMovement {
+  id            String           @id @default(uuid())
+  cashSessionId String
+  type          CashMovementType
+  amount        Decimal          @db.Decimal(12, 2)
+  invoiceId     String
+  createdById   String
+  createdAt     DateTime         @default(now())
+
+  cashSession CashSession @relation(fields: [cashSessionId], references: [id])
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  /// Número correlativo interno del comprobante.
+  number          Int           @unique @default(autoincrement())
+  patientId       String
+  appointmentId   String?
+  issuedById      String
+  cashSessionId   String
+  status          InvoiceStatus @default(ISSUED)
+  currency        String
+  taxRatePercent  Decimal       @db.Decimal(5, 2)
+  grossTotal      Decimal       @db.Decimal(12, 2)
+  discountTotal   Decimal       @db.Decimal(12, 2)
+  netTotal        Decimal       @db.Decimal(12, 2)
+  taxTotal        Decimal       @db.Decimal(12, 2)
+  total           Decimal       @db.Decimal(12, 2)
+  retentionTotal  Decimal       @default(0) @db.Decimal(12, 2)
+  /// Monto realmente cobrado = total − retenciones.
+  payableTotal    Decimal       @db.Decimal(12, 2)
+  notes           String?
+  // Comprobante fiscal electrónico (simulado tras la interfaz FiscalInvoiceProvider)
+  fiscalStatus    FiscalStatus  @default(PENDING)
+  fiscalProvider  String?
+  fiscalFolio     String?
+  fiscalAuthCode  String?
+  fiscalStampedAt DateTime?
+  fiscalError     String?
+  voidedAt        DateTime?
+  voidReason      String?
+  voidedById      String?
+  createdAt       DateTime      @default(now())
+
+  patient     Patient            @relation(fields: [patientId], references: [id])
+  appointment Appointment?       @relation(fields: [appointmentId], references: [id])
+  issuedBy    User               @relation("InvoiceIssuer", fields: [issuedById], references: [id])
+  cashSession CashSession        @relation(fields: [cashSessionId], references: [id])
+  lines       InvoiceLine[]
+  payments    Payment[]
+  retentions  InvoiceRetention[]
+  creditNote  CreditNote?
+
+  @@index([patientId, createdAt])
+  @@index([createdAt])
+  @@index([cashSessionId])
+}
+
+model InvoiceLine {
+  id              String  @id @default(uuid())
+  invoiceId       String
+  procedureId     String?
+  description     String
+  quantity        Int
+  unitPrice       Decimal @db.Decimal(12, 2)
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  discountAmount  Decimal @db.Decimal(12, 2)
+  netAmount       Decimal @db.Decimal(12, 2)
+  taxAmount       Decimal @db.Decimal(12, 2)
+  lineTotal       Decimal @db.Decimal(12, 2)
+
+  invoice   Invoice    @relation(fields: [invoiceId], references: [id])
+  procedure Procedure? @relation(fields: [procedureId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id                   String        @id @default(uuid())
+  invoiceId            String
+  cashSessionId        String
+  method               PaymentMethod
+  amount               Decimal       @db.Decimal(12, 2)
+  reference            String?
+  gatewayTransactionId String?
+  gatewayAuthCode      String?
+  createdAt            DateTime      @default(now())
+
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id])
+  cashSession CashSession @relation(fields: [cashSessionId], references: [id])
+
+  @@index([invoiceId])
+  @@index([cashSessionId, method])
+}
+
+/// Retenciones fiscales (estructura lista; el cálculo es simulado).
+model InvoiceRetention {
+  id        String        @id @default(uuid())
+  invoiceId String
+  type      RetentionType
+  percent   Decimal       @db.Decimal(5, 2)
+  amount    Decimal       @db.Decimal(12, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+/// La anulación de un comprobante genera una nota de crédito; nunca se borra nada.
+model CreditNote {
+  id              String       @id @default(uuid())
+  number          Int          @unique @default(autoincrement())
+  invoiceId       String       @unique
+  reason          String
+  total           Decimal      @db.Decimal(12, 2)
+  issuedById      String
+  fiscalStatus    FiscalStatus @default(PENDING)
+  fiscalFolio     String?
+  fiscalAuthCode  String?
+  fiscalStampedAt DateTime?
+  createdAt       DateTime     @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
 }

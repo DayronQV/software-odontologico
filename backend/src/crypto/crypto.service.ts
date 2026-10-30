@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 import { AppConfigService } from '../config/app-config';
 
 const PREFIX = 'enc:v1:';
@@ -16,6 +16,18 @@ export class CryptoService {
 
   constructor(config: AppConfigService) {
     this.key = Buffer.from(config.env.ENCRYPTION_KEY, 'base64');
+  }
+
+  /**
+   * Índice ciego: huella HMAC-SHA256 del texto normalizado (sin espacios, puntos ni guiones, en
+   * mayúsculas). Permite buscar por coincidencia exacta un dato que está cifrado (p. ej. el
+   * documento de identidad) sin guardarlo en claro ni poder revertir la huella.
+   */
+  blindIndex(value: string): string {
+    const normalized = value.trim().toUpperCase().replace(/[\s.-]/g, '');
+    return createHmac('sha256', Buffer.concat([this.key, Buffer.from('blind-index')]))
+      .update(normalized)
+      .digest('hex');
   }
 
   isEncrypted(value: string): boolean {

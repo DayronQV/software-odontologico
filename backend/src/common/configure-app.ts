@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { AppConfigService } from '../config/app-config';
 import { AllExceptionsFilter } from './all-exceptions.filter';
+import { serializeDecimalsAsNumbers } from './serialization';
 
 /** Configuración común de la app (la usan main.ts y las pruebas e2e). */
 export function configureApp(app: INestApplication): void {
@@ -12,6 +13,7 @@ export function configureApp(app: INestApplication): void {
   // Detrás de Nginx: para que req.ip sea la IP real del cliente (auditoría, rate limit).
   app.getHttpAdapter().getInstance().set('trust proxy', env.TRUST_PROXY);
 
+  serializeDecimalsAsNumbers();
   app.setGlobalPrefix('api');
   app.enableCors({
     origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()),

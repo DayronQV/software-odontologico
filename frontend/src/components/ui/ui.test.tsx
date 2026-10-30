@@ -13,8 +13,14 @@ describe('AlertBadge (RF-02: alerta médica de alta visibilidad)', () => {
     render(<AlertBadge level="critical">Alergia a penicilina</AlertBadge>);
     const badge = screen.getByRole('alert');
     expect(badge).toHaveTextContent('Alergia a penicilina');
-    expect(badge).toHaveTextContent('⚠');
-    expect(badge.className).toContain('bg-red-600');
+    expect(badge.querySelector('svg')).not.toBeNull(); // ícono: no depende solo del color
+    expect(badge.className).toContain('bg-rose-600');
+    expect(badge.className).toContain('font-bold');
+  });
+
+  it('las advertencias usan un tono ámbar más suave', () => {
+    render(<AlertBadge level="warning">Diabetes</AlertBadge>);
+    expect(screen.getByRole('status').className).toContain('bg-amber-50');
   });
 
   it('los demás niveles son estados informativos', () => {

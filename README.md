@@ -4,7 +4,7 @@ Sistema Integral de Gestión Odontológica y Expediente Clínico Digital — pro
 
 Implementa el *Documento de Requerimientos de Software (SRS v1.0)*: pacientes, agenda, odontograma, periodontograma, notas SOEP, consentimientos, presupuestos, facturación, inventario y auditoría, con seguridad de nivel clínico (TLS 1.3, AES-256, MFA, RBAC, log inmutable).
 
-> **Estado:** Fase 0 (fundación técnica y seguridad base) completada. Ver [`CLAUDE.md`](CLAUDE.md) para el contexto completo y el avance por fases.
+> **Estado:** Fases 0 (fundación y seguridad) y 1 (core administrativo y turnos: pacientes, anamnesis, agenda, recordatorios, POS y caja ciega) completadas. Ver [`CLAUDE.md`](CLAUDE.md) para el contexto completo y el avance por fases.
 
 ## Stack
 
@@ -45,6 +45,7 @@ Contraseña de todos: `Sigo-Dev-2026!` (ver `.env.example`).
 | admin@sigo.test | Administrador TI |
 | recepcion@sigo.test | Recepcionista / Cajero |
 | odontologo@sigo.test | Odontólogo |
+| especialista@sigo.test | Odontólogo (segundo profesional) |
 | asistente@sigo.test | Asistente Dental |
 | auditor@sigo.test | Auditor / Contador |
 
@@ -71,6 +72,12 @@ npm run dev
 ```
 
 > PostgreSQL de Docker se publica en el puerto **5433** (no 5432) para no chocar con un Postgres local.
+
+## Fase 1 en breve
+
+- **Pacientes y anamnesis** con alertas críticas, **agenda** día/semana por consultorio/sillón/profesional (sin solapamientos), **recordatorios** 48 h/24 h (Email real a Mailpit en http://localhost:8025; WhatsApp/SMS simulados), **POS** con pagos mixtos y comprobante electrónico simulado, **caja ciega** y administración de catálogos.
+- Usuarios de prueba (clave `Sigo-Dev-2026!`): `admin`, `recepcion`, `odontologo`, `especialista`, `asistente`, `auditor` @sigo.test. Todos deben activar MFA al primer ingreso.
+- Pacientes demo: Carlos Mendoza (alergia a penicilina, anticoagulado), Sofía Ramírez (menor de edad), Ana Torres (sin anamnesis).
 
 ## Pruebas
 

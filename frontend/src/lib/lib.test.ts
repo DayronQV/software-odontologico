@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveIdleMinutes } from './env';
-import { ALL_ROLES, navFor } from './roles';
+import { ALL_ROLES, navFor, navSections } from './roles';
 import { changePasswordSchema, createUserSchema, loginSchema, PASSWORD_REGEX } from './schemas';
 
 describe('resolveIdleMinutes (RNF-05c)', () => {
@@ -26,10 +26,28 @@ describe('navFor', () => {
     }
   });
 
-  it('solo el administrador gestiona usuarios; auditoría para admin y auditor', () => {
+  it('solo el administrador gestiona la administración; auditoría para admin y auditor', () => {
     const has = (role: (typeof ALL_ROLES)[number], to: string) => navFor(role).some((i) => i.to === to);
-    expect(ALL_ROLES.filter((r) => has(r, '/users'))).toEqual(['ADMIN_TI']);
+    expect(ALL_ROLES.filter((r) => has(r, '/admin'))).toEqual(['ADMIN_TI']);
     expect(ALL_ROLES.filter((r) => has(r, '/audit'))).toEqual(['ADMIN_TI', 'AUDITOR']);
+  });
+
+  it('pacientes y agenda solo para el personal clínico y de recepción (no admin ni auditor)', () => {
+    const has = (role: (typeof ALL_ROLES)[number], to: string) => navFor(role).some((i) => i.to === to);
+    for (const to of ['/patients', '/agenda', '/waiting-room']) {
+      expect(ALL_ROLES.filter((r) => has(r, to))).toEqual(['RECEPCIONISTA', 'ODONTOLOGO', 'ASISTENTE']);
+    }
+  });
+
+  it('la caja la opera recepción y el administrador; el auditor solo consulta', () => {
+    const has = (role: (typeof ALL_ROLES)[number], to: string) => navFor(role).some((i) => i.to === to);
+    expect(ALL_ROLES.filter((r) => has(r, '/billing/pos'))).toEqual(['ADMIN_TI', 'RECEPCIONISTA']);
+    expect(ALL_ROLES.filter((r) => has(r, '/billing/cash'))).toEqual(['ADMIN_TI', 'RECEPCIONISTA', 'AUDITOR']);
+  });
+
+  it('agrupa el menú por secciones en orden', () => {
+    expect(navSections('RECEPCIONISTA').map((g) => g.section)).toEqual(['Principal', 'Clínica', 'Caja', 'Cuenta']);
+    expect(navSections('ADMIN_TI').map((g) => g.section)).toEqual(['Principal', 'Caja', 'Sistema', 'Cuenta']);
   });
 });
 

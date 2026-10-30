@@ -38,6 +38,17 @@ describe('CryptoService (AES-256-GCM)', () => {
     expect(() => service.decrypt('enc:v1:AAAA')).toThrow('truncado');
   });
 
+  it('blindIndex: misma huella para el mismo documento, sin importar el formato', () => {
+    expect(service.blindIndex('010-203.0405')).toBe(service.blindIndex(' 0102030405 '));
+    expect(service.blindIndex('ab 123')).toBe(service.blindIndex('AB123'));
+    expect(service.blindIndex('0102030405')).not.toBe(service.blindIndex('0102030406'));
+    expect(service.blindIndex('0102030405')).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('blindIndex depende de la clave: otra clave, otra huella', () => {
+    expect(new CryptoService(config(KEY_B)).blindIndex('123')).not.toBe(service.blindIndex('123'));
+  });
+
   it('isEncrypted distingue valores cifrados', () => {
     expect(service.isEncrypted(service.encrypt('x'))).toBe(true);
     expect(service.isEncrypted('x')).toBe(false);

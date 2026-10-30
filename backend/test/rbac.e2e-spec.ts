@@ -59,6 +59,17 @@ describe('RBAC con menor privilegio (RNF-05a)', () => {
     ['/api/audit', [Role.ADMIN_TI, Role.AUDITOR]],
     ['/api/audit/verify', [Role.ADMIN_TI, Role.AUDITOR]],
     ['/api/files/download-url?key=uploads/x/y.pdf', [Role.ADMIN_TI, Role.ODONTOLOGO, Role.ASISTENTE]],
+    // Fase 1: pacientes y agenda no son para el administrador de TI ni para el auditor
+    ['/api/patients', [Role.RECEPCIONISTA, Role.ODONTOLOGO, Role.ASISTENTE]],
+    ['/api/agenda/appointments', [Role.RECEPCIONISTA, Role.ODONTOLOGO, Role.ASISTENTE]],
+    ['/api/agenda/appointments/waiting-room', [Role.RECEPCIONISTA, Role.ODONTOLOGO, Role.ASISTENTE]],
+    ['/api/catalog/offices', [...ALL_ROLES]],
+    ['/api/catalog/procedures', [...ALL_ROLES]],
+    ['/api/catalog/alert-rules', [Role.ADMIN_TI, Role.RECEPCIONISTA, Role.ODONTOLOGO, Role.ASISTENTE]],
+    // Caja y facturación
+    ['/api/billing/invoices', [Role.ADMIN_TI, Role.RECEPCIONISTA, Role.AUDITOR]],
+    ['/api/billing/cash-sessions/current', [Role.ADMIN_TI, Role.RECEPCIONISTA]],
+    ['/api/billing/cash-sessions', [Role.ADMIN_TI, Role.AUDITOR]],
     ['/api/test-rbac/solo-auditor', [Role.AUDITOR]],
     ['/api/test-rbac/cualquiera', [...ALL_ROLES]],
   ];

@@ -80,10 +80,10 @@ export class EventsGateway implements OnGatewayInit {
   }
 
   emitToRole(role: Role, event: string, payload: unknown): void {
-    this.server.to(`role:${role}`).emit(event, payload);
+    this.server?.to(`role:${role}`).emit(event, payload);
   }
 
   emitToUser(userId: string, event: string, payload: unknown): void {
-    this.server.to(`user:${userId}`).emit(event, payload);
+    this.server?.to(`user:${userId}`).emit(event, payload);
   }
 }

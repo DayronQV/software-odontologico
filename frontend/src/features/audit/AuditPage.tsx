@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { AlertBadge } from '../../components/ui/AlertBadge';
+import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { EmptyState, InlineError, Spinner } from '../../components/ui/Feedback';
 import { Field } from '../../components/ui/Field';
+import { Icon } from '../../components/ui/Icon';
+import { PageHeader } from '../../components/ui/PageHeader';
+import { Pagination } from '../../components/ui/Pagination';
 import { DataTable, type Column } from '../../components/ui/Table';
 import { useToast } from '../../components/ui/Toast';
-import { api, ApiError } from '../../lib/api';
+import { api } from '../../lib/api';
+import { useDebouncedValue } from '../../lib/useDebouncedValue';
+import { usePagedList } from '../../lib/usePagedList';
+import { errorMessage } from '../../lib/useResource';
 
 interface AuditRow {
   id: string;
@@ -17,13 +26,6 @@ interface AuditRow {
   ip: string | null;
 }
 
-interface AuditPageData {
-  total: number;
-  page: number;
-  pageSize: number;
-  items: AuditRow[];
-}
-
 interface Verification {
   valid: boolean;
   checked: number;
@@ -31,97 +33,61 @@ interface Verification {
   firstInvalidId?: string;
 }
 
-const PAGE_SIZE = 15;
-
 const columns: Column<AuditRow>[] = [
-  { header: 'Fecha (UTC)', cell: (r) => <time dateTime={r.timestamp}>{r.timestamp.replace('T', ' ').slice(0, 19)}</time> },
-  { header: 'Acción', cell: (r) => <span className="font-mono text-xs">{r.action}</span> },
-  { header: 'Entidad', cell: (r) => r.entity },
-  { header: 'Rol', cell: (r) => r.role ?? '—', hideOnSmall: true },
-  { header: 'IP', cell: (r) => r.ip ?? '—', hideOnSmall: true },
+  { header: 'Fecha (UTC)', cell: (r) => <time dateTime={r.timestamp} className="whitespace-nowrap text-xs text-slate-600">{r.timestamp.replace('T', ' ').slice(0, 19)}</time> },
+  { header: 'Acción', cell: (r) => <Badge tone={r.action.includes('FAIL') ? 'danger' : r.action === 'READ' ? 'info' : 'brand'}>{r.action}</Badge> },
+  { header: 'Entidad', cell: (r) => <span className="font-medium text-slate-800">{r.entity}</span> },
+  { header: 'Rol', hideOnSmall: true, cell: (r) => r.role ?? '—' },
+  { header: 'IP', hideOnSmall: true, cell: (r) => <span className="font-mono text-xs">{r.ip ?? '—'}</span> },
 ];
 
 export function AuditPage() {
   const toast = useToast();
-  const [data, setData] = useState<AuditPageData | null>(null);
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ action: '', entity: '' });
-  const [draft, setDraft] = useState(filters);
+  const [action, setAction] = useState('');
+  const [entity, setEntity] = useState('');
+  const filters = { action: useDebouncedValue(action.trim()), entity: useDebouncedValue(entity.trim()) };
+  const { data, error, loading, page, setPage, pageSize } = usePagedList<AuditRow>('/audit', { pageSize: 15, filters });
   const [verification, setVerification] = useState<Verification | null>(null);
   const [verifying, setVerifying] = useState(false);
-
-  const load = useCallback(async () => {
-    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
-    if (filters.action) params.set('action', filters.action);
-    if (filters.entity) params.set('entity', filters.entity);
-    try {
-      setData(await api<AuditPageData>(`/audit?${params.toString()}`));
-    } catch (e) {
-      toast.push('error', e instanceof ApiError ? e.message : 'No se pudo conectar.');
-    }
-  }, [page, filters, toast]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const applyFilters = (event: FormEvent) => {
-    event.preventDefault();
-    setPage(1);
-    setFilters(draft);
-  };
 
   const verify = async () => {
     setVerifying(true);
     try {
       setVerification(await api<Verification>('/audit/verify'));
     } catch (e) {
-      toast.push('error', e instanceof ApiError ? e.message : 'No se pudo conectar.');
+      toast.push('error', errorMessage(e));
     } finally {
       setVerifying(false);
     }
   };
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-900">Auditoría</h1>
-        <Button variant="secondary" onClick={verify} loading={verifying}>
-          Verificar integridad del log
-        </Button>
-      </div>
-
+    <>
+      <PageHeader
+        title="Auditoría"
+        description="Registro inmutable de quién accedió o modificó qué, cuándo y desde dónde."
+        actions={<Button variant="secondary" onClick={verify} loading={verifying}><Icon name="shield" className="h-4 w-4" /> Verificar integridad</Button>}
+      />
       {verification && (
-        <AlertBadge level={verification.valid ? 'success' : 'critical'}>
-          {verification.valid
-            ? `Cadena íntegra: ${verification.checked} registros verificados`
-            : `¡Log alterado! ${verification.reason} (registro ${verification.firstInvalidId})`}
-        </AlertBadge>
-      )}
-
-      <form onSubmit={applyFilters} className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
-        <Field label="Acción" placeholder="LOGIN, READ…" value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })} />
-        <Field label="Entidad" placeholder="User, Auth…" value={draft.entity} onChange={(e) => setDraft({ ...draft, entity: e.target.value })} />
-        <Button type="submit">Filtrar</Button>
-      </form>
-
-      <DataTable columns={columns} rows={data?.items ?? []} getKey={(r) => r.id} caption="Registros de auditoría" empty="Sin registros para este filtro" />
-
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          {data ? `${data.total} registros · página ${data.page} de ${totalPages}` : 'Cargando…'}
-        </p>
-        <div className="flex gap-2">
-          <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Anterior
-          </Button>
-          <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-            Siguiente
-          </Button>
+        <div className="mb-4">
+          <AlertBadge level={verification.valid ? 'success' : 'critical'}>
+            {verification.valid ? `Cadena íntegra: ${verification.checked} registros verificados` : `¡Log alterado! ${verification.reason} (registro ${verification.firstInvalidId})`}
+          </AlertBadge>
         </div>
-      </div>
-    </div>
+      )}
+      <Card flush>
+        <div className="grid gap-3 border-b border-line p-4 sm:grid-cols-2">
+          <Field label="Acción" placeholder="LOGIN, READ, CREATE…" value={action} onChange={(e) => setAction(e.target.value)} />
+          <Field label="Entidad" placeholder="Patient, Appointment, Invoice…" value={entity} onChange={(e) => setEntity(e.target.value)} />
+        </div>
+        {error && <div className="p-4"><InlineError>{error}</InlineError></div>}
+        {loading && !data ? <Spinner /> : data?.items.length === 0 ? (
+          <EmptyState icon="shield" title="Sin registros para este filtro" />
+        ) : (
+          <DataTable columns={columns} rows={data?.items ?? []} getKey={(r) => r.id} caption="Registros de auditoría" />
+        )}
+        {data && <div className="px-4 pb-4"><Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} /></div>}
+      </Card>
+    </>
   );
 }
