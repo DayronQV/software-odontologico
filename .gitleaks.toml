@@ -1,0 +1,18 @@
+# Configuración de gitleaks para SIGO-Dental.
+# Los únicos hallazgos del historial son valores de DESARROLLO públicos y documentados: el backend los rechaza
+# en producción (ver backend/src/config/app-config.ts) y las pruebas usan una clave propia de test.
+title = "SIGO-Dental"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Secretos de desarrollo/pruebas conocidos y referencias a variables de entorno"
+regexTarget = "match"
+regexes = [
+  '''39b9a1107a1223b26b793d2aaaf223fde62bc02920377422e5ed1643c82cb6bb''',
+  '''nOToCiHZwXXg7ow2HSJS98hdTqC88qPO9iHRP7ZjnbE=''',
+  '''sigo-key:WsXiHS2Y4osgNZdexBVGoy8Bdr\+i4s86oBQX0/ZEmEg=''',
+  '''dGVzdC1vbmx5LWVuY3J5cHRpb24ta2V5LTMyYnl0ZXM=''',
+  '''secretAccessKey:\s*env\.S3_SECRET_KEY''',
+]

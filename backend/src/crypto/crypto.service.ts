@@ -36,7 +36,7 @@ export class CryptoService {
 
   encrypt(plain: string): string {
     const iv = randomBytes(IV_LENGTH);
-    const cipher = createCipheriv('aes-256-gcm', this.key, iv);
+    const cipher = createCipheriv('aes-256-gcm', this.key, iv, { authTagLength: TAG_LENGTH });
     const ciphertext = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
     const tag = cipher.getAuthTag();
     return PREFIX + Buffer.concat([iv, tag, ciphertext]).toString('base64');
@@ -53,7 +53,7 @@ export class CryptoService {
     const iv = raw.subarray(0, IV_LENGTH);
     const tag = raw.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
     const ciphertext = raw.subarray(IV_LENGTH + TAG_LENGTH);
-    const decipher = createDecipheriv('aes-256-gcm', this.key, iv);
+    const decipher = createDecipheriv('aes-256-gcm', this.key, iv, { authTagLength: TAG_LENGTH });
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
   }

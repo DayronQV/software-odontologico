@@ -7,7 +7,8 @@ ARG VITE_IDLE_MINUTES=15
 ENV VITE_IDLE_MINUTES=$VITE_IDLE_MINUTES
 RUN npm run build
 
-FROM nginx:1.27-alpine
+# Sin privilegios de root (usuario nginx, puerto 8080)
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080

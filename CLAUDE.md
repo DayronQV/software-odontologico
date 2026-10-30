@@ -64,7 +64,7 @@ Implícitos a no olvidar: recetas odontológicas, catálogo médico (procedimien
 | 1 | Pacientes (RF-01/02), agenda (RF-09/10, RN-03), recordatorios (RF-11), POS/facturación simulada (RF-12), caja ciega (RN-02), catálogo médico, usuarios/catálogos Admin | ✅ **Completada** |
 | 2 | Odontograma, periodontograma, SOEP+firma, consentimientos, recetas, presupuestos, adjuntos (RF-03…08, RN-01) | ✅ **Completada** |
 | 3 | Comisiones (RF-13), descargo de insumos (RF-14), inventario, reportes BI, rol Auditor | ✅ **Completada** |
-| 4 | UAT, SAST/DAST, carga 150 usuarios, backups, producción, OpenAPI final | ⏳ Pendiente |
+| 4 | UAT, SAST/DAST, carga 150 usuarios, backups, producción (Render), OpenAPI final | ✅ **Completada** (v1.0.0) |
 
 Resultados Fase 0: backend 100 pruebas (cobertura ≈ 98 % líneas), frontend 60 pruebas (cobertura ≈ 54 %; el SRS exige 80 % solo en endpoints críticos del backend), lint y tipos limpios. Verificado en Docker: TLS 1.2 rechazado/TLS 1.3 ok, MFA→RBAC→WSS por el gateway, campos cifrados en Postgres, triggers de auditoría, y UI responsive medida en 1920×1080, 1366×768, iPad 10.5" (horizontal y vertical).
 
@@ -95,6 +95,15 @@ Resultados Fase 3: backend 53 suites / 563 pruebas (≈ 92 % sentencias, 94 % l�
 - Frontend: `components/layout`, `components/ui`, `features/{admin,patients,agenda,billing,catalog,...}`; Agenda (FullCalendar) con carga diferida; hooks `useResource`, `usePagedList`, `useDebouncedValue`.
 - Seed: 6 usuarios (incl. `especialista@sigo.test`), 13 procedimientos, 3 pacientes demo.
 - Trampas: (1) el plugin CLI de Swagger genera `require("C:/…")` en Windows para propiedades tipadas con clases → usar `@ApiProperty({ type: () => X })`; (2) en Vitest, `beforeEach(() => mock.mockReset())` devuelve el mock y se ejecuta como limpieza → usar llaves; (3) `prisma migrate reset` está bloqueado → las e2e hacen `DROP SCHEMA` en `globalSetup`.
+
+### Arquitectura Fase 4 (producción)
+- **Despliegue:** `render.yaml` (Blueprint: gateway nginx-unprivileged + backend + Postgres + Key Value + cron de respaldos; S3 externo R2/B2; SMTP real) y `docker-compose.prod.yml` (autoalojado: healthchecks, `depends_on: service_healthy`, `restart: unless-stopped`, logs rotados, red interna, nginx TLS 1.3 con `./certs`). Variables en `.env.production.example`. Arranque de producción: `BOOTSTRAP_PRODUCTION=true` ejecuta `dist/seed-production.js` (admin inicial desde `INITIAL_ADMIN_*` + catálogos base; nunca usuarios `@sigo.test`). `SWAGGER_ENABLED` apagado por defecto en producción; en producción se rechazan secretos y clave S3 de desarrollo.
+- **Respaldos** (`backend/src/backup`, imagen `backend/Dockerfile.backup` sobre `postgres:16-alpine`): `pg_dump -Fc` cifrado AES-256-GCM (clave HKDF de `ENCRYPTION_KEY`) + espejo incremental de documentos + manifiestos con SHA-256 + retención; comandos `backup|list|prune|restore|daemon`. Dev: `docker compose --profile backup run --rm backup backup`.
+- **Telemetría:** `GET /api/system/status` y `/api/system/backups` (solo `ADMIN_TI`); página *Administración → Sistema y respaldos*.
+- **OpenAPI:** `common/openapi-enrichment.ts` completa resumen, roles (`x-roles`, vía `@Roles`), errores y esquema `ErrorResponse`; `backend/openapi.json` se regenera con `WRITE_OPENAPI=1 npx jest ... test/openapi` y se valida con Spectral.
+- **Calidad/seguridad:** `.github/workflows/ci.yml` (umbrales de cobertura por módulo en `backend/jest.config.js`, gitleaks con `.gitleaks.toml`, Semgrep, Trivy, `npm audit`, ZAP). Documentación entregable (versionada) en `documentacion/`; `docs/` sigue siendo local.
+- **Pruebas vivas:** `uat/uat-e2e.js` (45 casos), `loadtest/` (k6), `e2e/` (Playwright, 9 perfiles de navegador/dispositivo). Todos requieren un sistema recién levantado (`docker compose down -v && up -d`) porque activan el MFA de los usuarios semilla.
+- Trampas: (1) el CSP de nginx necesita `font-src 'self' data:` (FullCalendar incrusta su fuente) y `img-src ... blob:`/`frame-src blob:` (visor de adjuntos/PDF); (2) los contenedores nginx del frontend/gateway Render usan `nginx-unprivileged` (puerto 8080/`$PORT`); (3) en Playwright el refresh token rota: inyectarlo solo en la primera carga; (4) dependencias: `overrides` en `backend/package.json` (multer, js-yaml de swagger, deepmerge-ts) corrigen avisos de `npm audit`; zod 4 + `@hookform/resolvers` 5.
 
 ## Convenciones
 - TypeScript estricto; ESLint + Prettier (comillas simples, 100 cols). Commits en español, estilo `feat(fase-N): …`, `fix: …`.

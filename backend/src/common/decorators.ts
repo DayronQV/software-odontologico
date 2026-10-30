@@ -1,4 +1,5 @@
-import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
+import { applyDecorators, createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
+import { ApiExtension } from '@nestjs/swagger';
 import type { Role } from '@prisma/client';
 import type { AuthenticatedRequest, RequestMetaData } from './types';
 
@@ -13,7 +14,8 @@ export const AUDIT_ACTION_KEY = 'sigo:auditAction';
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 /** Roles autorizados. Un endpoint sin @Roles/@AnyRole/@Public se DENIEGA (menor privilegio). */
-export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
+export const Roles = (...roles: Role[]) =>
+  applyDecorators(SetMetadata(ROLES_KEY, roles), ApiExtension('x-roles', roles));
 
 /** Cualquier usuario autenticado, sin importar el rol. */
 export const AnyRole = () => SetMetadata(ANY_ROLE_KEY, true);

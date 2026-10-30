@@ -104,7 +104,7 @@ export function PosPage() {
   return (
     <>
       <PageHeader title="Punto de venta" description="Cobro con pagos mixtos y comprobante electrónico (simulado)." />
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6">
           <Card title="Paciente"><PatientPicker label="Buscar paciente" value={patient} onChange={setPatient} /></Card>
           <Card title="Detalle de la venta">

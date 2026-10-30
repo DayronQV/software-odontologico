@@ -37,6 +37,20 @@ describe('parseEnv', () => {
     expect(() =>
       parseEnv({ ...valid, NODE_ENV: 'production', ENCRYPTION_KEY: DEV_ENCRYPTION_KEY }),
     ).toThrow('desarrollo');
-    expect(parseEnv({ ...valid, NODE_ENV: 'production' }).NODE_ENV).toBe('production');
+    // La clave de almacenamiento por defecto (de desarrollo) tampoco se admite
+    expect(() => parseEnv({ ...valid, NODE_ENV: 'production' })).toThrow('almacenamiento');
+    expect(
+      parseEnv({ ...valid, NODE_ENV: 'production', S3_SECRET_KEY: 'clave-real-de-produccion' }).NODE_ENV,
+    ).toBe('production');
+  });
+
+  it('Swagger y SMTP: valores por defecto seguros', () => {
+    const env = parseEnv(valid);
+    expect(env.SWAGGER_ENABLED).toBeUndefined();
+    expect(env.SMTP_SECURE).toBe(false);
+    expect(parseEnv({ ...valid, SMTP_SECURE: 'true', SWAGGER_ENABLED: 'false' })).toMatchObject({
+      SMTP_SECURE: true,
+      SWAGGER_ENABLED: 'false',
+    });
   });
 });

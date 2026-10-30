@@ -8,7 +8,7 @@ const OFFICES = [
 
 const INSURERS = ['Seguros Sonrisa', 'Convenio Salud Total'];
 
-const PROCEDURES = [
+export const PROCEDURES = [
   { code: 'CONS-01', name: 'Consulta de valoración', category: 'Diagnóstico', durationMinutes: 30, basePrice: 25, labCost: 0, requiresConsent: false },
   { code: 'RX-01', name: 'Radiografía periapical', category: 'Diagnóstico', durationMinutes: 15, basePrice: 12, labCost: 0, requiresConsent: false },
   { code: 'LIMP-01', name: 'Limpieza dental (profilaxis)', category: 'Preventiva', durationMinutes: 45, basePrice: 40, labCost: 0, requiresConsent: false },
@@ -39,6 +39,12 @@ const SCHEDULES: Record<string, { kind: ProfessionalKind; specialty: string; slo
 };
 
 /** Catálogo de demostración: consultorios, sillones, procedimientos, seguros y profesionales. Idempotente. */
+export async function seedProcedures({ prisma }: SeedContext): Promise<void> {
+  for (const procedure of PROCEDURES) {
+    await prisma.procedure.upsert({ where: { code: procedure.code }, update: {}, create: procedure });
+  }
+}
+
 export async function seedCatalog({ prisma }: SeedContext): Promise<void> {
   for (const office of OFFICES) {
     const saved = await prisma.office.upsert({

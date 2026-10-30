@@ -32,7 +32,7 @@ export function ReportsPage() {
     <>
       <PageHeader title="Reportes" description={finance ? 'Panel de indicadores y reportes de gestión, exportables a PDF y CSV.' : 'Sus propios indicadores: ingresos, agenda y procedimientos.'} />
       {catalog.error && <InlineError>{catalog.error}</InlineError>}
-      <div className="grid gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
         <nav aria-label="Reportes disponibles">
           <ul className="flex gap-2 overflow-x-auto lg:flex-col">
             {catalog.loading && !catalog.data && <li><Spinner /></li>}

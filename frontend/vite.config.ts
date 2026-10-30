@@ -23,6 +23,9 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/main.tsx', 'src/test/**', 'src/**/*.test.{ts,tsx}', 'src/vite-env.d.ts'],
+      reporter: ['text-summary', 'lcov', 'json-summary', 'html'],
+      // Evita regresiones. El 80 % del SRS §8.2 aplica a los endpoints críticos del backend.
+      thresholds: { statements: 30, lines: 30, functions: 25, branches: 30 },
     },
   },
 });

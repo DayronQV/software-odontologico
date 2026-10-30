@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import { AppConfigService } from '../config/app-config';
@@ -28,6 +28,11 @@ export class BlobStorageService {
     // El backend habla con MinIO por la red interna; el navegador usa la URL pública.
     this.client = new S3Client({ ...common, endpoint: env.S3_ENDPOINT });
     this.presigner = new S3Client({ ...common, endpoint: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT });
+  }
+
+  /** Comprueba que el bucket responde (telemetría). */
+  async ping(): Promise<void> {
+    await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
   }
 
   async put(key: string, body: Buffer, contentType: string): Promise<void> {

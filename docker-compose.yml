@@ -70,6 +70,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sigo_minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-sigo_minio_dev_password}
       MINIO_BUCKET: ${MINIO_BUCKET:-sigo-files}
+      BACKUP_BUCKET: ${BACKUP_S3_BUCKET:-sigo-backups}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -81,9 +82,11 @@ services:
           [ "$$i" -ge 30 ] && echo "MinIO no responde" && exit 1
           sleep 2
         done
-        mc mb --ignore-existing "local/$$MINIO_BUCKET"
-        mc encrypt set sse-s3 "local/$$MINIO_BUCKET"
-        echo "Bucket $$MINIO_BUCKET listo con cifrado SSE-S3"
+        for bucket in "$$MINIO_BUCKET" "$$BACKUP_BUCKET"; do
+          mc mb --ignore-existing "local/$$bucket"
+          mc encrypt set sse-s3 "local/$$bucket"
+        done
+        echo "Buckets listos con cifrado SSE-S3"
 
   mailpit:
     image: axllent/mailpit:latest
@@ -143,6 +146,7 @@ services:
       SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-900}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://localhost,http://localhost:5173}
       THROTTLE_AUTH_LIMIT: ${THROTTLE_AUTH_LIMIT:-5}
+      THROTTLE_LIMIT: ${THROTTLE_LIMIT:-600}
       THROTTLE_AUTH_TTL_SECONDS: ${THROTTLE_AUTH_TTL_SECONDS:-60}
       TRUST_PROXY: "1"
       SMTP_HOST: mailpit
@@ -161,6 +165,27 @@ services:
       retries: 10
       start_period: 30s
 
+  # Respaldos (solo bajo demanda en desarrollo):  docker compose run --rm backup backup | list | restore <id> <url>
+  backup:
+    profiles: ["backup"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backup
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sigo}:${POSTGRES_PASSWORD:-sigo_dev_password}@postgres:5432/${POSTGRES_DB:-sigo}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-nOToCiHZwXXg7ow2HSJS98hdTqC88qPO9iHRP7ZjnbE=}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-sigo_minio}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-sigo_minio_dev_password}
+      S3_BUCKET: ${MINIO_BUCKET:-sigo-files}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-sigo-backups}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+
   frontend:
     build:
       context: ./frontend
@@ -168,7 +193,7 @@ services:
         VITE_IDLE_MINUTES: ${VITE_IDLE_MINUTES:-15}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
       interval: 10s
       timeout: 5s
       retries: 5

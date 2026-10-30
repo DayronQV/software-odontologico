@@ -22,6 +22,7 @@ import { ConfigModule } from './config/config.module';
 import { CryptoModule } from './crypto/crypto.module';
 import { FilesModule } from './files/files.module';
 import { HealthModule } from './health/health.module';
+import { SystemModule } from './system/system.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queue/queue.module';
 import { RealtimeModule } from './realtime/realtime.module';
@@ -53,6 +54,7 @@ import { UsersModule } from './users/users.module';
     QueueModule,
     RealtimeModule,
     HealthModule,
+    SystemModule,
   ],
   providers: [
     // El orden importa: 1) límite de peticiones, 2) autenticación + MFA, 3) roles (deniega por defecto).

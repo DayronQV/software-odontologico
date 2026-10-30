@@ -9,4 +9,9 @@ if [ "$SEED_ON_START" = "true" ]; then
   node dist/seed.js
 fi
 
+# Producción: primer administrador + catálogos base (idempotente, sin usuarios de prueba).
+if [ "$BOOTSTRAP_PRODUCTION" = "true" ]; then
+  node dist/seed-production.js
+fi
+
 exec node dist/main.js

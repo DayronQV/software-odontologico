@@ -25,3 +25,9 @@ npm-debug.log*
 Thumbs.db
 .idea/
 .vscode/
+!.env.production.example
+loadtest/users.json
+loadtest/results/
+e2e/sessions.json
+e2e/node_modules/
+e2e/results/

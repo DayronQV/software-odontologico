@@ -12,6 +12,7 @@ import { OfficesPage } from './features/admin/offices/OfficesPage';
 import { ProceduresPage } from './features/admin/procedures/ProceduresPage';
 import { ProfessionalsPage } from './features/admin/professionals/ProfessionalsPage';
 import { SettingsPage } from './features/admin/settings/SettingsPage';
+import { SystemPage } from './features/admin/system/SystemPage';
 import { UsersPage } from './features/admin/users/UsersPage';
 import { Spinner } from './components/ui/Feedback';
 import { WaitingRoomPage } from './features/agenda/waiting/WaitingRoomPage';
@@ -140,6 +141,7 @@ export function App() {
           <Route path="medications" element={<MedicationsPage />} />
           <Route path="discounts" element={<DiscountAuthorizationPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="system" element={<SystemPage />} />
         </Route>
         <Route path="audit" element={guard(['ADMIN_TI', 'AUDITOR'], <AuditPage />)} />
       </Route>

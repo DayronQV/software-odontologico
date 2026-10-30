@@ -7,5 +7,5 @@ export const AUTH_THROTTLE = {
   ttl: Number(process.env.THROTTLE_AUTH_TTL_SECONDS ?? 60) * 1000,
 };
 
-/** Límite general de la API (por IP). */
-export const DEFAULT_THROTTLE = { limit: 600, ttl: 60_000 };
+/** Límite general de la API (por IP): 600/min por defecto; ajustable con THROTTLE_LIMIT (p. ej. en pruebas de carga). */
+export const DEFAULT_THROTTLE = { limit: Number(process.env.THROTTLE_LIMIT ?? 600), ttl: 60_000 };

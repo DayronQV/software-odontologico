@@ -1,0 +1,122 @@
+name: CI
+
+# Calidad + seguridad (SRS §8.2). Un umbral de cobertura o un hallazgo Alto/Crítico rompe el pipeline.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (tipos, lint, pruebas y cobertura ≥ 80 %)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Infraestructura de pruebas (PostgreSQL, Redis, MinIO)
+        run: docker compose up -d --wait postgres redis minio && docker compose up minio-init
+      - run: npm ci
+        working-directory: backend
+      - run: npx prisma generate
+        working-directory: backend
+      - run: npm run typecheck
+        working-directory: backend
+      - run: npm run lint
+        working-directory: backend
+      - name: Pruebas unitarias + e2e con umbrales de cobertura
+        run: npm run test:cov
+        working-directory: backend
+      - name: Contrato OpenAPI 3.0 (Spectral)
+        run: npx --yes @stoplight/spectral-cli lint openapi.json --fail-severity=warn
+        working-directory: backend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura-backend
+          path: backend/coverage
+          retention-days: 30
+
+  frontend:
+    name: Frontend (tipos, lint, pruebas y compilación)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+      - run: npm run test:cov
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura-frontend
+          path: frontend/coverage
+          retention-days: 30
+
+  seguridad:
+    name: Seguridad (SAST, dependencias, secretos, contenedores)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks revisa TODO el historial
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Dependencias vulnerables (producción, Alta o Crítica)
+        run: |
+          (cd backend && npm ci --ignore-scripts && npm audit --omit=dev --audit-level=high)
+          (cd frontend && npm ci --ignore-scripts && npm audit --omit=dev --audit-level=high)
+      - name: Secretos en el código y el historial (gitleaks)
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /repo --config /repo/.gitleaks.toml --no-banner
+      - name: SAST (Semgrep, reglas OWASP Top 10)
+        run: >
+          docker run --rm -v "$PWD:/src" semgrep/semgrep semgrep scan
+          --config p/owasp-top-ten --config p/typescript --config p/nodejs --config p/secrets
+          --severity ERROR --error --exclude node_modules --exclude dist --exclude coverage --metrics=off /src
+      - name: Vulnerabilidades y mala configuración (Trivy)
+        run: >
+          docker run --rm -v "$PWD:/repo" aquasec/trivy:latest fs
+          --scanners vuln,misconfig --severity HIGH,CRITICAL --exit-code 1
+          --skip-dirs node_modules,dist,coverage,docs /repo
+
+  dast:
+    name: DAST (OWASP ZAP sobre el sistema desplegado)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Levantar el sistema completo
+        run: docker compose up -d --build --wait
+      - name: ZAP baseline (pasivo + spider) contra el gateway TLS 1.3
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t https://localhost -I -r zap-baseline.html -J zap-baseline.json \
+            -z "-config connection.sslAcceptAll=true"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: informe-zap
+          path: zap
+          retention-days: 30

@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { AppConfigService } from '../config/app-config';
 import { AllExceptionsFilter } from './all-exceptions.filter';
+import { enrichOpenApi } from './openapi-enrichment';
 import { serializeDecimalsAsNumbers } from './serialization';
 
 /** Configuración común de la app (la usan main.ts y las pruebas e2e). */
@@ -32,14 +33,30 @@ export function configureApp(app: INestApplication): void {
   );
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  const document = SwaggerModule.createDocument(
-    app,
-    new DocumentBuilder()
-      .setTitle('SIGO-Dental API')
-      .setDescription('Sistema Integral de Gestión Odontológica y Expediente Clínico Digital')
-      .setVersion('0.1.0')
-      .addBearerAuth()
-      .build(),
+  const swaggerEnabled = env.SWAGGER_ENABLED
+    ? env.SWAGGER_ENABLED === 'true'
+    : env.NODE_ENV !== 'production';
+  if (!swaggerEnabled) return;
+
+  const document = enrichOpenApi(
+    SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder()
+        .setTitle('SIGO-Dental API')
+        .setDescription(
+          'Sistema Integral de Gestión Odontológica y Expediente Clínico Digital. ' +
+            'Autenticación: JWT de acceso (10 min) + MFA TOTP obligatorio; sesión inactiva máx. 15 min.',
+        )
+        .setVersion('1.0.0')
+        .setContact('SIGO-Dental', '', 'soporte@sigo-dental.test')
+        .addServer('/', 'Servidor actual')
+        .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
+        .build(),
+      {
+        operationIdFactory: (controller: string, method: string) =>
+          `${controller.replace(/Controller$/, '')}_${method}`,
+      },
+    ),
   );
   SwaggerModule.setup('api/docs', app, document, { jsonDocumentUrl: 'api/docs-json' });
 }

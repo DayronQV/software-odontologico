@@ -1,0 +1,136 @@
+# Blueprint de Render para SIGO-Dental (https://render.com/docs/blueprint-spec).
+# Despliegue: Dashboard > New > Blueprint > repositorio. Guía paso a paso: documentacion/despliegue-render.md
+# Los planes "free" sirven para la demostración (se duermen tras 15 min sin tráfico y la BD gratuita caduca).
+# Para el uso real (RNF-02, 99,9 % de 07:00 a 21:00) suba cada plan a "starter" o superior.
+
+databases:
+  - name: sigo-db
+    databaseName: sigo
+    user: sigo
+    plan: free
+    postgresMajorVersion: "16"
+    ipAllowList: [] # solo accesible desde la red privada de Render
+
+services:
+  - type: keyvalue
+    name: sigo-redis
+    plan: free
+    maxmemoryPolicy: noeviction # BullMQ y la sesión deslizante no admiten expulsión de claves
+    ipAllowList: []
+
+  - type: web
+    name: sigo-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sigo-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: sigo-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      # Clave AES-256 (base64, 32 bytes). NO la rote ni la pierda: sin ella los datos cifrados son ilegibles.
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: TRUST_PROXY
+        value: "2" # Render (balanceador) -> gateway nginx -> backend
+      - key: CORS_ORIGIN
+        sync: false # URL pública del gateway, p. ej. https://sigo-gateway.onrender.com
+      - key: SWAGGER_ENABLED
+        value: "false"
+      - key: BOOTSTRAP_PRODUCTION
+        value: "true"
+      - key: SEED_ON_START
+        value: "false"
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
+      - key: INITIAL_ADMIN_NAME
+        value: Administrador del sistema
+      - key: MFA_ISSUER
+        value: SIGO-Dental
+      # Correo transaccional real (RF-11): cualquier SMTP con plan gratuito (Brevo, Mailjet, Gmail con clave de aplicación)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      # Almacenamiento compatible con S3 (Cloudflare R2 o Backblaze B2, ambos con capa gratuita), cifrado en reposo.
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_BUCKET
+        value: sigo-files
+
+  - type: web
+    name: sigo-gateway
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./docker/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /nginx-health
+    autoDeploy: false
+    envVars:
+      - key: BACKEND_HOSTPORT
+        fromService:
+          type: web
+          name: sigo-backend
+          property: hostport
+
+  # Respaldos automáticos cifrados (RNF/§Fase 4): diario 02:00 hora de Bogotá (07:00 UTC).
+  - type: cron
+    name: sigo-backup
+    runtime: docker
+    plan: starter
+    region: oregon
+    schedule: "0 7 * * *"
+    dockerfilePath: ./backend/Dockerfile.backup
+    dockerContext: ./backend
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sigo-db
+          property: connectionString
+      - key: ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: sigo-backend
+          envVarKey: ENCRYPTION_KEY
+      - key: BACKUP_RETENTION_DAYS
+        value: "30"
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: BACKUP_PREFIX
+        value: backups/

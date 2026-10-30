@@ -29,6 +29,10 @@ const envSchema = z.object({
   // Correo transaccional (RF-11). En desarrollo apunta a Mailpit.
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /** true = TLS implícito (puerto 465); false = STARTTLS si el servidor lo ofrece. */
+  SMTP_SECURE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   MAIL_FROM: z.string().default('SIGO-Dental <no-reply@sigo-dental.test>'),
 
   S3_ENDPOINT: z.string().default('http://localhost:9000'),
@@ -37,6 +41,9 @@ const envSchema = z.object({
   S3_ACCESS_KEY: z.string().default('sigo_minio'),
   S3_SECRET_KEY: z.string().default('sigo_minio_dev_password'),
   S3_BUCKET: z.string().default('sigo-files'),
+
+  /** Documentación Swagger en /api/docs: activa por defecto salvo en producción. */
+  SWAGGER_ENABLED: z.enum(['true', 'false']).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -51,6 +58,9 @@ export function parseEnv(source: NodeJS.ProcessEnv): Env {
   if (env.NODE_ENV === 'production') {
     if (env.JWT_ACCESS_SECRET === DEV_JWT_SECRET || env.ENCRYPTION_KEY === DEV_ENCRYPTION_KEY) {
       throw new Error('En producción no se pueden usar los secretos de desarrollo');
+    }
+    if (env.S3_SECRET_KEY === 'sigo_minio_dev_password') {
+      throw new Error('En producción no se puede usar la clave de almacenamiento de desarrollo');
     }
   }
   return env;

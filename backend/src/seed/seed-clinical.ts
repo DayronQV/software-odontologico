@@ -132,7 +132,10 @@ const FINDINGS: Array<[number, ToothSurface, FindingType, FindingStatus]> = [
 ];
 
 /** Catálogo clínico: medicamentos y plantillas de consentimiento. Idempotente. */
-export async function seedClinicalCatalog({ prisma }: SeedContext): Promise<void> {
+export async function seedClinicalCatalog(
+  { prisma }: SeedContext,
+  adminEmail = 'admin@sigo.test',
+): Promise<void> {
   for (const medication of MEDICATIONS) {
     await prisma.medication.upsert({
       where: { name: medication.name },
@@ -140,7 +143,7 @@ export async function seedClinicalCatalog({ prisma }: SeedContext): Promise<void
       create: medication,
     });
   }
-  const admin = await prisma.user.findUnique({ where: { email: 'admin@sigo.test' } });
+  const admin = await prisma.user.findUnique({ where: { email: adminEmail } });
   if (!admin) return;
   const procedures = await prisma.procedure.findMany({ where: { requiresConsent: true } });
   for (const procedure of procedures) {

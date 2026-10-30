@@ -97,6 +97,15 @@ npm run dev
 - **Reportes BI:** corte de caja, ingresos, cuentas por cobrar, agenda y No-Show, procedimientos, presupuestos, inventario y honorarios, con panel de KPIs y exportación PDF/CSV auditada.
 - El Auditor ve caja, honorarios e inventario pero no datos clínicos; el odontólogo solo sus propios indicadores y comisiones; recepción no accede.
 
+## Fase 4 en breve (UAT, seguridad y producción)
+
+- **Producción:** `docker-compose.prod.yml` (autoalojado, healthchecks, orden de arranque, reinicio automático, logs rotados, sin puertos internos expuestos) y `render.yaml` (Blueprint de Render). Arranque de producción idempotente: primer administrador + catálogos base, **sin usuarios de prueba**. Guías en [`documentacion/`](documentacion/).
+- **Respaldos:** PostgreSQL cifrado con AES-256-GCM + espejo de documentos, retención configurable y restauración verificada (`backend/src/backup`, `Dockerfile.backup`).
+- **Telemetría** para el administrador (*Administración → Sistema y respaldos*, `GET /api/system/status`) y script de alertas `scripts/monitor.sh`.
+- **Seguridad:** SAST (Semgrep), dependencias (`npm audit`, Trivy), secretos (gitleaks sobre todo el historial), DAST (OWASP ZAP) y revisión OWASP Top 10 con pruebas automáticas (`backend/test/security-owasp.e2e-spec.ts`). Swagger apagado por defecto en producción.
+- **Calidad:** CI en GitHub Actions con umbrales de cobertura que rompen el pipeline, contrato OpenAPI 3.0 exportado (`backend/openapi.json`) y validado con Spectral.
+- **UAT, carga y navegadores:** `uat/uat-e2e.js` (45 casos de aceptación), `loadtest/` (k6, 150 usuarios) y `e2e/` (Playwright: Chromium, Firefox, WebKit y tabletas táctiles).
+
 ## Pruebas
 
 ```bash
@@ -107,6 +116,9 @@ npm run test:cov    # todo + cobertura (umbral 80 %)
 
 cd frontend
 npm test
+npm run test:cov    # cobertura con umbral
+
+node uat/uat-e2e.js # aceptación de extremo a extremo (sistema nuevo en Docker)
 ```
 
 Las pruebas e2e usan la base `sigo_test` y Redis DB 1; nunca tocan los datos de desarrollo.
@@ -128,10 +140,15 @@ Las pruebas e2e usan la base `sigo_test` y Redis DB 1; nunca tocan los datos de 
 ## Estructura
 
 ```
-backend/    NestJS: auth, users, audit, files, queue, realtime, health (+ prisma/)
-frontend/   React: features/, components/, lib/
-docker/     Nginx (gateway) y SQL de inicialización
-docker-compose.yml
+backend/        NestJS: auth, users, audit, files, queue, realtime, health, system, backup (+ prisma/)
+frontend/       React: features/, components/, lib/
+docker/         Nginx (gateway), SQL de inicialización y gateway de Render
+docker-compose.yml        desarrollo
+docker-compose.prod.yml   producción autoalojada
+render.yaml               Blueprint de Render
+documentacion/  despliegue, operación, restauración, manual de usuario, UAT, seguridad, carga
+uat/ loadtest/ e2e/       aceptación, carga (k6) y navegadores (Playwright)
+.github/workflows/ci.yml  calidad + seguridad + DAST
 ```
 
 ## Integraciones simuladas

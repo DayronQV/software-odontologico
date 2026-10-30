@@ -30,33 +30,62 @@ const CHAIN_LOCK_KEY = 727001;
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private pending: Array<{ entry: AuditEntry; resolve: () => void; reject: (e: unknown) => void }> = [];
+  private flushing = false;
+
   /**
-   * Agrega un registro a la cadena. Se serializa con un bloqueo de PostgreSQL para que
-   * dos escrituras simultáneas no encadenen al mismo registro previo.
+   * Agrega un registro a la cadena. Las escrituras simultáneas se agrupan (*group commit*): un solo
+   * bloqueo de PostgreSQL y una sola transacción encadenan todo el lote en orden, así que dos
+   * escrituras nunca encadenan al mismo registro previo y bajo carga el bloqueo no es un cuello de
+   * botella. La petición espera a que SU registro esté confirmado: si falla, la petición falla.
    */
-  async record(entry: AuditEntry): Promise<void> {
+  record(entry: AuditEntry): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.pending.push({ entry, resolve, reject });
+      void this.flush();
+    });
+  }
+
+  private async flush(): Promise<void> {
+    if (this.flushing) return;
+    this.flushing = true;
+    try {
+      while (this.pending.length > 0) {
+        const batch = this.pending.splice(0, 200);
+        try {
+          await this.writeBatch(batch.map((b) => b.entry));
+          batch.forEach((b) => b.resolve());
+        } catch (error) {
+          batch.forEach((b) => b.reject(error));
+        }
+      }
+    } finally {
+      this.flushing = false;
+    }
+  }
+
+  private async writeBatch(entries: AuditEntry[]): Promise<void> {
     await this.prisma.db.$transaction(async (tx) => {
+      // También serializa entre varias instancias del backend.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${CHAIN_LOCK_KEY})`;
-      const last = await tx.auditLog.findFirst({
-        orderBy: { id: 'desc' },
-        select: { hash: true },
-      });
-      const prevHash = last?.hash ?? GENESIS_HASH;
-      const timestamp = new Date();
-      const hash = computeAuditHash(prevHash, {
-        timestamp: timestamp.toISOString(),
-        userId: entry.userId ?? null,
-        role: entry.role ?? null,
-        action: entry.action,
-        entity: entry.entity,
-        entityId: entry.entityId ?? null,
-        ip: entry.ip ?? null,
-        userAgent: entry.userAgent ?? null,
-        before: entry.before ?? null,
-        after: entry.after ?? null,
-      });
-      await tx.auditLog.create({
-        data: {
+      const last = await tx.auditLog.findFirst({ orderBy: { id: 'desc' }, select: { hash: true } });
+      let prevHash = last?.hash ?? GENESIS_HASH;
+      const rows: Prisma.AuditLogCreateManyInput[] = [];
+      for (const entry of entries) {
+        const timestamp = new Date();
+        const hash = computeAuditHash(prevHash, {
+          timestamp: timestamp.toISOString(),
+          userId: entry.userId ?? null,
+          role: entry.role ?? null,
+          action: entry.action,
+          entity: entry.entity,
+          entityId: entry.entityId ?? null,
+          ip: entry.ip ?? null,
+          userAgent: entry.userAgent ?? null,
+          before: entry.before ?? null,
+          after: entry.after ?? null,
+        });
+        rows.push({
           timestamp,
           userId: entry.userId ?? null,
           role: entry.role ?? null,
@@ -69,8 +98,11 @@ export class AuditService {
           after: entry.after,
           prevHash,
           hash,
-        },
-      });
+        });
+        prevHash = hash;
+      }
+      // createMany inserta en el orden dado: los ids autoincrementales siguen la cadena.
+      await tx.auditLog.createMany({ data: rows });
     });
   }
 

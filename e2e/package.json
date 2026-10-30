@@ -1,0 +1,13 @@
+{
+  "name": "sigo-dental-e2e-navegadores",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Validación de navegadores y responsive (RNF-07, RNF-08) con Playwright",
+  "scripts": {
+    "install:browsers": "playwright install chromium firefox webkit",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

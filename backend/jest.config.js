@@ -29,14 +29,25 @@ module.exports = {
     'src/**/*.ts',
     '!src/main.ts',
     '!src/seed.ts',
+    '!src/seed-production.ts',
+    '!src/seed/**',
     '!src/**/*.spec.ts',
     '!src/**/*.module.ts',
     '!src/**/*.dto.ts',
     '!src/**/dto/**',
   ],
   coverageDirectory: 'coverage',
-  // Criterio de aceptación del SRS §8.2: cobertura mínima del 80 %
+  coverageReporters: ['text-summary', 'lcov', 'json-summary', 'html'],
+  // Criterio de aceptación del SRS §8.2: cobertura mínima del 80 % en los endpoints críticos.
+  // Si baja de estos umbrales, `npm run test:cov` falla y con él el pipeline de CI.
   coverageThreshold: {
     global: { statements: 80, branches: 70, functions: 80, lines: 80 },
+    './src/auth/': { statements: 85, lines: 85, functions: 80 },
+    './src/audit/': { statements: 85, lines: 85, functions: 80 },
+    './src/crypto/': { statements: 90, lines: 90, functions: 90 },
+    './src/billing/': { statements: 80, lines: 80, functions: 75 },
+    './src/clinical/': { statements: 80, lines: 80, functions: 75 },
+    './src/patients/': { statements: 85, lines: 85, functions: 80 },
+    './src/agenda/': { statements: 80, lines: 80, functions: 75 },
   },
 };

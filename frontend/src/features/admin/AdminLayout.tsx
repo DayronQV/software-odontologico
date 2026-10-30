@@ -13,6 +13,7 @@ const TABS: TabItem[] = [
   { to: '/admin/medications', label: 'Medicamentos' },
   { to: '/admin/discounts', label: 'Descuentos' },
   { to: '/admin/settings', label: 'Parámetros' },
+  { to: '/admin/system', label: 'Sistema y respaldos' },
 ];
 
 export function AdminLayout() {
