@@ -1,0 +1,22 @@
+name: Mantener Render despierto
+
+# El plan gratuito de Render duerme los servicios tras 15 min sin tráfico. Este flujo hace una petición cada 10 min
+# SOLO en el horario de atención (07:00-21:00 de Bogotá = 12:00-02:00 UTC) para no gastar las horas gratuitas del mes.
+# Para detenerlo: pestaña Actions > "Mantener Render despierto" > menú (...) > Disable workflow.
+on:
+  schedule:
+    - cron: '*/10 12-23,0-1 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Despertar gateway y backend
+        run: |
+          # La primera petición puede tardar hasta ~1 min si los servicios estaban dormidos.
+          curl -sS -m 90 --retry 2 --retry-delay 10 -o /dev/null -w "gateway /api/health -> %{http_code}\n" \
+            https://sigo-gateway.onrender.com/api/health || echo "sin respuesta (se reintentará en el próximo ciclo)"
