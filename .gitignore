@@ -1,0 +1,27 @@
+# Dependencias y builds
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Secretos y configuración local (nunca commitear)
+.env
+.env.*
+!.env.example
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Certificados y llaves generadas
+*.pem
+*.key
+*.crt
+
+# Logs y sistema
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

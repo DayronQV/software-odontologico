@@ -1,0 +1,199 @@
+name: sigo-dental
+
+# Infraestructura + aplicación. Valores por defecto SOLO PARA DESARROLLO (ver .env.example).
+#   Todo el sistema:        docker compose up -d --build        ->  https://localhost
+#   Solo infraestructura:   docker compose up -d postgres redis minio minio-init mailpit
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sigo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sigo_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-sigo}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-sigo_redis_dev}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-sigo_redis_dev}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # MinIO oficial ya no publica imágenes en Docker Hub/Quay; se usa el espejo congelado de Bitnami
+  # (suficiente para desarrollo; en producción usar S3/Azure Blob real, la API es la misma).
+  minio:
+    image: bitnamilegacy/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sigo_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-sigo_minio_dev_password}
+      # Habilita el cifrado del lado del servidor (SSE-S3) con una clave KMS integrada.
+      MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY:-sigo-key:WsXiHS2Y4osgNZdexBVGoy8Bdr+i4s86oBQX0/ZEmEg=}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # Crea el bucket y activa el cifrado por defecto (SSE-S3) en él.
+  minio-init:
+    image: bitnamilegacy/minio-client:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sigo_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-sigo_minio_dev_password}
+      MINIO_BUCKET: ${MINIO_BUCKET:-sigo-files}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        # MinIO se reinicia una vez al arrancar: reintentar hasta que acepte conexiones.
+        i=0
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do
+          i=$$((i+1))
+          [ "$$i" -ge 30 ] && echo "MinIO no responde" && exit 1
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
+        mc encrypt set sse-s3 "local/$$MINIO_BUCKET"
+        echo "Bucket $$MINIO_BUCKET listo con cifrado SSE-S3"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Genera un certificado TLS de desarrollo (autofirmado, gratis) si no existe.
+  certs:
+    image: alpine:3.20
+    volumes:
+      - certs:/certs
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        if [ ! -f /certs/server.crt ]; then
+          apk add --no-cache openssl >/dev/null
+          openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+            -keyout /certs/server.key -out /certs/server.crt \
+            -subj "/CN=localhost" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+          echo "Certificado de desarrollo generado"
+        else
+          echo "Certificado ya existe"
+        fi
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sigo}:${POSTGRES_PASSWORD:-sigo_dev_password}@postgres:5432/${POSTGRES_DB:-sigo}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:-sigo_redis_dev}@redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-39b9a1107a1223b26b793d2aaaf223fde62bc02920377422e5ed1643c82cb6bb}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-nOToCiHZwXXg7ow2HSJS98hdTqC88qPO9iHRP7ZjnbE=}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-600}
+      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-604800}
+      SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-900}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://localhost,http://localhost:5173}
+      THROTTLE_AUTH_LIMIT: ${THROTTLE_AUTH_LIMIT:-5}
+      THROTTLE_AUTH_TTL_SECONDS: ${THROTTLE_AUTH_TTL_SECONDS:-60}
+      TRUST_PROXY: "1"
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-sigo_minio}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-sigo_minio_dev_password}
+      S3_BUCKET: ${MINIO_BUCKET:-sigo-files}
+      SEED_ON_START: ${SEED_ON_START:-true}
+      SEED_PASSWORD: ${SEED_PASSWORD:-Sigo-Dev-2026!}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_IDLE_MINUTES: ${VITE_IDLE_MINUTES:-15}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Gateway / Ingress: único punto de entrada, TLS 1.3.
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/nginx-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  certs:

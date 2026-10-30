@@ -1,0 +1,94 @@
+// SIGO-Dental — esquema de datos (Fase 0: usuarios, MFA, sesiones, auditoría)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Perfiles del SRS §3
+enum Role {
+  ADMIN_TI
+  RECEPCIONISTA
+  ODONTOLOGO
+  ASISTENTE
+  AUDITOR
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  fullName     String
+  /// Documento de identidad. Se guarda CIFRADO (AES-256-GCM) por la extensión de Prisma.
+  documentId   String?
+  passwordHash String
+  role         Role
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  mfa           MfaSecret?
+  refreshTokens RefreshToken[]
+}
+
+model MfaSecret {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  /// Secreto TOTP en base32. Se guarda CIFRADO (AES-256-GCM) por la extensión de Prisma.
+  secret        String
+  confirmed     Boolean   @default(false)
+  /// Último paso de 30 s aceptado (evita reutilizar el mismo código TOTP).
+  lastUsedStep  Int?
+  /// Hashes SHA-256 de los códigos de recuperación aún no usados.
+  recoveryCodes String[]
+  createdAt     DateTime  @default(now())
+  confirmedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  id           String    @id @default(uuid())
+  userId       String
+  sessionId    String
+  tokenHash    String    @unique
+  mfaVerified  Boolean   @default(false)
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+}
+
+/// Log de auditoría inmutable (RNF-06). Solo inserciones: un trigger SQL rechaza UPDATE/DELETE/TRUNCATE
+/// y cada registro encadena el hash del anterior.
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  timestamp DateTime @default(now()) @db.Timestamptz(3)
+  userId    String?
+  role      Role?
+  action    String
+  entity    String
+  entityId  String?
+  ip        String?
+  userAgent String?
+  before    Json?
+  after     Json?
+  prevHash  String
+  hash      String   @unique
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([action])
+}
