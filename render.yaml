@@ -45,7 +45,7 @@ services:
       - key: ENCRYPTION_KEY
         generateValue: true
       - key: TRUST_PROXY
-        value: "2" # Render (balanceador) -> gateway nginx -> backend
+        value: "3" # balanceador de Render -> gateway nginx -> balanceador de Render -> backend
       - key: CORS_ORIGIN
         sync: false # URL pública del gateway, p. ej. https://sigo-gateway.onrender.com
       - key: SWAGGER_ENABLED
@@ -95,11 +95,10 @@ services:
     healthCheckPath: /nginx-health
     autoDeploy: false
     envVars:
-      - key: BACKEND_HOSTPORT
-        fromService:
-          type: web
-          name: sigo-backend
-          property: hostport
+      # URL pública del backend: el plan gratuito no recibe tráfico por la red privada.
+      # Si Render le asigna otro sufijo (Dashboard > sigo-backend), cámbiela aquí o en Environment del gateway.
+      - key: BACKEND_ORIGIN
+        value: https://sigo-backend-xyrr.onrender.com
 
   # Respaldos: el cron de Render no tiene plan gratuito, por eso NO se incluye en este plan 100 % gratis.
   # Para respaldar a mano (desde su equipo, con el cliente de PostgreSQL) o activar un cron de pago, ver

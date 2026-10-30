@@ -11,7 +11,7 @@ RUN npm run build
 
 # Sin privilegios de root (usuario nginx)
 FROM nginxinc/nginx-unprivileged:1.27-alpine
-# nginx sustituye ${PORT}, ${BACKEND_HOSTPORT} y ${NGINX_LOCAL_RESOLVERS} al arrancar (plantillas).
+# nginx sustituye ${PORT} y ${BACKEND_ORIGIN} al arrancar (plantillas).
 COPY docker/render/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 ENV PORT=10000 NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1

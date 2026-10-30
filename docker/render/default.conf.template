@@ -1,4 +1,5 @@
-# Gateway de SIGO-Dental en Render. Variables: PORT y BACKEND_HOSTPORT (host:puerto interno del backend en la red privada de Render).
+# Gateway de SIGO-Dental en Render. Variables: PORT y BACKEND_ORIGIN (URL pública https del backend; en el plan gratuito
+# Render no admite tráfico por la red privada hacia servicios gratuitos).
 # Solo se acepta el upgrade a WebSocket (evita el contrabando de conexiones h2c).
 map $http_upgrade $ws_upgrade {
     default   "";
@@ -33,11 +34,12 @@ server {
     }
 
     location /api/ {
-        resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
-        set $backend "http://${BACKEND_HOSTPORT}";
+        resolver 1.1.1.1 8.8.8.8 valid=30s ipv6=off;
+        set $backend "${BACKEND_ORIGIN}";
         proxy_pass $backend;
         proxy_hide_header Strict-Transport-Security;
         proxy_http_version 1.1;
+        proxy_ssl_server_name on;
         proxy_set_header Host $proxy_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
@@ -45,11 +47,12 @@ server {
     }
 
     location /ws/ {
-        resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
-        set $backend "http://${BACKEND_HOSTPORT}";
+        resolver 1.1.1.1 8.8.8.8 valid=30s ipv6=off;
+        set $backend "${BACKEND_ORIGIN}";
         proxy_pass $backend;
         proxy_hide_header Strict-Transport-Security;
         proxy_http_version 1.1;
+        proxy_ssl_server_name on;
         proxy_set_header Upgrade $ws_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $proxy_host;
